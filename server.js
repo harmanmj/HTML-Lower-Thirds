@@ -781,7 +781,11 @@ async function setNetworkAccess(on) {
   if (!networkServers.length) return "Couldn't open the network addresses: " + failures.join(", ");
   networkEnabled = true;
   console.log("\n  Network access ON. Other devices can use:");
-  for (const a of addrs) console.log(`    http://${a.ip}:${PORT}/   (${a.name})`);
+  for (const a of addrs) {
+    console.log(`    ${a.name}`);
+    console.log(`      Control panel:       http://${a.ip}:${PORT}/`);
+    console.log(`      OBS Browser Source:  http://${a.ip}:${PORT}/overlay.html`);
+  }
   if (failures.length) console.log("  Not available on: " + failures.join(", "));
   return "";
 }

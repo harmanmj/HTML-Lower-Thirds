@@ -84,7 +84,12 @@
   #slist .pill { display: block; margin-bottom: 2px; }
   .netbtn { font: inherit; font-size: 12px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
   .netbtn.on { border-color: var(--go); color: var(--text); }
-  #netList li { font-family: ui-monospace, Consolas, monospace; font-size: 13px; user-select: all; }
+  #netList li.netaddr { display: block; padding: 8px 2px; }
+  #netList .nname { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+  #netList .nrow { display: grid; grid-template-columns: 130px 1fr auto; gap: 8px; align-items: center; margin: 3px 0; }
+  #netList .nlbl { font-size: 12px; color: var(--muted); }
+  #netList code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; user-select: all; overflow-wrap: anywhere; }
+  #netList .copy { padding: 3px 8px; font-size: 12px; }
   .slist { max-height: 360px; overflow-y: auto; margin-top: 8px; }
   .keys { font-size: 12px; color: var(--muted); margin: -6px 0 10px; }
   .keys b { color: var(--text); font-weight: 600; }
@@ -147,7 +152,7 @@
       <span class="hint" id="rfile"></span>
       <span style="display:flex;gap:6px;flex:none">
         <button class="btn ghost" id="editBtn" type="button">Edit…</button>
-        <button class="btn ghost" id="browseBtn" type="button">Browse…</button>
+        <button class="btn ghost" id="browseBtn" type="button">Load service…</button>
       </span>
     </div>
     <div class="hint warn" id="rerr"></div>
@@ -219,7 +224,7 @@
 
 <div class="modal" id="browser" hidden>
   <div class="sheet">
-    <h2>Choose a service order file</h2>
+    <h2>Load a service</h2>
     <div class="hint" id="bdir"></div>
     <ul class="plist blist" id="blist"></ul>
     <div class="hint warn" id="berr"></div>
@@ -356,7 +361,7 @@
   function renderRundown(r) {
     const ul = $("rlist");
     ul.innerHTML = "";
-    if (r.missing) ul.innerHTML = `<li class="empty">File not found. Use Browse… to pick one.</li>`;
+    if (r.missing) ul.innerHTML = `<li class="empty">File not found. Use Load service… to pick one.</li>`;
     else if (!r.items.length) ul.innerHTML = `<li class="empty">Nothing in the file yet.</li>`;
     let lastSongLine = null;
     r.items.forEach((item, i) => {
@@ -409,8 +414,23 @@
     ul.innerHTML = "";
     $("netErr").textContent = "";
     if (net.enabled) {
-      $("netText").textContent = "Phones and other computers on this network can open these addresses. In OBS on another computer, add overlay.html to the end, for example http://192.168.1.20:" + net.port + "/overlay.html. If Windows asked about the firewall and it wasn't allowed, see Allow-Network-Access.bat in the README. Network access turns off again when the app is closed.";
-      for (const a of net.addresses) { const li = document.createElement("li"); li.textContent = a.url + "   (" + a.name + ")"; ul.appendChild(li); }
+      $("netText").textContent = "Other devices on this network can use these addresses. If one doesn't work, try the next: the Wi-Fi or Ethernet one is usually right, and virtual adapters (vEthernet, WSL) can be ignored. If Windows asked about the firewall and it wasn't allowed, see Allow-Network-Access.bat in the README. Network access turns off again when the app is closed.";
+      for (const a of net.addresses) {
+        const li = document.createElement("li");
+        li.className = "netaddr";
+        li.innerHTML = `<div class="nname"></div>
+          <div class="nrow"><span class="nlbl">Control panel</span><code></code><button class="btn ghost copy" type="button">Copy</button></div>
+          <div class="nrow"><span class="nlbl">OBS Browser Source</span><code></code><button class="btn ghost copy" type="button">Copy</button></div>`;
+        li.querySelector(".nname").textContent = a.name;
+        const urls = [a.url, a.url + "overlay.html"];
+        li.querySelectorAll("code").forEach((c, i) => { c.textContent = urls[i]; });
+        li.querySelectorAll(".copy").forEach((b, i) => b.onclick = async () => {
+          try { await navigator.clipboard.writeText(urls[i]); b.textContent = "Copied"; }
+          catch { const r = document.createRange(); r.selectNodeContents(li.querySelectorAll("code")[i]); getSelection().removeAllRanges(); getSelection().addRange(r); b.textContent = "Ctrl+C"; }
+          setTimeout(() => { b.textContent = "Copy"; }, 1500);
+        });
+        ul.appendChild(li);
+      }
       if (!net.addresses.length) ul.innerHTML = `<li class="empty">No network connection found.</li>`;
     } else {
       $("netText").textContent = "Right now only this computer can use HTML Lower Thirds. Turn on network access to use the control panel from a phone, a tablet or another computer, or to run OBS on a different computer. Windows may ask about the firewall the first time; allowing it needs an administrator. It goes back to this-computer-only the next time the app starts.";

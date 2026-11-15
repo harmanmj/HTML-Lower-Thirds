@@ -26,7 +26,7 @@
   #tpl-person .panel {
     background: var(--sp-bg); color: var(--sp-text);
     width: 480px; padding: 0 var(--sp-pad);
-    box-sizing: border-box; overflow: hidden;
+    box-sizing: border-box;
   }
   #tpl-person .name-box  { height: 54px; }
   #tpl-person .title-box { height: 27px; }
@@ -47,15 +47,18 @@
     align-items: center; justify-content: center;
   }
   #tpl-lyrics .lyrics {
-    width: 100%; max-height: 100%; overflow: hidden;
+    /* Room for letter tails (g, j, p, q, y) and the outline, so nothing gets cut off */
+    padding: 0.14em 48px;
+    box-sizing: border-box; width: 100%;
     color: var(--ly-text);
     font-family: 'Arial', sans-serif;
     font-size: 72px; font-weight: bold; line-height: 1.1em;
-    -webkit-text-stroke-width: 10px;
+    -webkit-text-stroke-width: 0.139em;   /* 10px at 72px; scales down when long lines shrink the text */
     -webkit-text-stroke-color: var(--ly-stroke);
     paint-order: stroke fill;    /* outline sits behind the letters so they stay full weight */
     text-shadow: 0px 0px 0px #000000;
-    text-align: center; white-space: pre-line;   /* keep the song file's line breaks */
+    text-align: center;
+    white-space: pre;   /* one row per line of the song file; long lines shrink instead of wrapping */
   }
 </style>
 </head>
@@ -87,13 +90,14 @@
       let size = parseFloat(getComputedStyle(f).fontSize);
       while (f.scrollWidth > avail && size > 10) f.style.fontSize = (--size) + "px";
     });
-    // Shrink multi-line text until it fits its box in both directions
+    // Lyrics: if a row is too wide (or there are too many rows), shrink the text just enough
+    // that the widest row fits; every row of a slide keeps the same size
     el.querySelectorAll("[data-fit-box]").forEach(f => {
       f.style.fontSize = "";
       const box = f.parentElement, cs = getComputedStyle(box);
       const maxH = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
       let size = parseFloat(getComputedStyle(f).fontSize);
-      while ((f.scrollHeight > maxH || f.scrollWidth > f.clientWidth) && size > 10) f.style.fontSize = (--size) + "px";
+      while ((f.scrollHeight > maxH || f.scrollWidth > f.clientWidth) && size > 10) f.style.fontSize = (size -= 1) + "px";
     });
   }
 

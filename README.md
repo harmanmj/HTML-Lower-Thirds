@@ -70,7 +70,7 @@ song | 1 - the morning breaks
 - `song |` takes a hymn number (`1003`), a file name, or part of a title. It expands into the song's lyric slides, starting with its title.
 - **→** or **Space** shows the next item, **←** goes back, and **Esc** clears the screen. Click any line to show it, and double-click a speaker line to load it into the form for a one-off edit.
 - Songs that can't be found are listed in orange with their line numbers.
-- **Browse…** switches to another service file. **Edit…** opens the Setup tab.
+- **Load service…** switches to another service file (for example last week's, or another ward's). **Edit…** opens the Setup tab.
 - Edits to the service file, or to any song in it, appear within a couple of seconds.
 
 ## Setup tab
@@ -82,6 +82,7 @@ Builds a service without editing text files by hand. It's also available on its 
 - **Saved people:** click someone to add them to the service.
 - **Songs:** search by hymn number or title; use ↑ ↓ and Enter to pick.
 - **Reorder** by dragging the numbers or with ▲ ▼; ✕ removes an item. Speaker names can be edited in place.
+- **Load service…** opens a saved service to edit it, starting in the Services folder (with a folder per ward). The control panel switches to it too.
 - **Save** (Ctrl+S) updates the current file. **New service…** and **Save as…** ask for a date (defaults to the coming Sunday), a service name and a **ward**. The file is saved as `Services\<ward>\yyyy-mm-dd Service name.txt` (or straight in the folder with "No ward") and the control panel switches to it. **Change…** picks the folder; the folder and ward are remembered.
 
 ### Leadership.txt
@@ -178,7 +179,7 @@ GET works for all of these, so Stream Deck "Website" buttons and Bitfocus Compan
 
 ## Building the app
 
-The release workflow (`.github/workflows/release.yml`) builds the Windows and Linux apps on every push to `main`. When the `version` in `package.json` hasn't been released yet, it publishes a GitHub release tagged `v<version>`; 0.x versions are marked as pre-releases. So to release a new version, bump `version` and push. To build locally with Node 22+: `npm run build`, which creates the app in `dist/`.
+The release workflow (`.github/workflows/release.yml`) builds the Windows and Linux apps on every push to `main`. When the `version` in `package.json` hasn't been released yet, it publishes a GitHub release tagged `v<version>`; 0.x versions are marked as pre-releases. So to release a new version, bump `version` and push. To build locally with Node 22+: double-click `Build-Exe.bat` on Windows, or run `npm run build`. Either creates the app in `dist/`.
 
 ```
 server.js               the app (Node built-ins only)
