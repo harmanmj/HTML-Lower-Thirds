@@ -432,46 +432,32 @@ const PEOPLE_FILE = expandPath(config.leadershipFile || "Leadership.txt");
 const PEOPLE_HEADER = [
   "# Leadership lists for the service order setup page.",
   "# Each [Section] is a list. One person per line:  Name | Title",
-  "# Subsections: [Arvada 1st Ward / Bishopric]",
   "# Edit here or from the Setup tab; changes show up automatically.",
 ];
-// A heading can name a subsection of a list:  [Arvada 1st Ward / Bishopric]
 function parsePeople(text) {
   const groups = [];
-  const groupFor = (name) => {
-    let g = groups.find((x) => x.name.toLowerCase() === name.toLowerCase());
-    if (!g) { g = { name, people: [] }; groups.push(g); }
-    return g;
-  };
-  let cur = null, section = "";
+  let cur = null;
   for (const raw of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
     const line = raw.trim();
     if (!line || line.startsWith("#")) continue;
     const m = line.match(/^\[(.*)\]$/);
     if (m) {
-      const [name, ...sub] = m[1].split("/").map((x) => x.trim());
-      cur = groupFor(name || "List");
-      section = sub.join(" / ");
+      const name = m[1].trim() || "List";
+      cur = groups.find((x) => x.name.toLowerCase() === name.toLowerCase());
+      if (!cur) { cur = { name, people: [] }; groups.push(cur); }
       continue;
     }
-    if (!cur) cur = groupFor("People");
+    if (!cur) { cur = { name: "People", people: [] }; groups.push(cur); }
     const [name, ...rest] = line.split(/\s*\|\s*/);
-    cur.people.push({ name: name.trim(), title: rest.join(" ").trim(), section });
+    cur.people.push({ name: name.trim(), title: rest.join(" ").trim() });
   }
   return { groups };
 }
 function serializePeople(data) {
   const out = PEOPLE_HEADER.slice();
   for (const g of data.groups) {
-    // People without a subsection first, then each subsection in the order it first appears
-    const sections = [""];
-    for (const p of g.people) if (p.section && !sections.includes(p.section)) sections.push(p.section);
-    for (const sec of sections) {
-      const list = g.people.filter((p) => (p.section || "") === sec);
-      if (sec && !list.length) continue;
-      out.push("", sec ? `[${g.name} / ${sec}]` : `[${g.name}]`);
-      for (const p of list) out.push(p.title ? `${p.name} | ${p.title}` : p.name);
-    }
+    out.push("", `[${g.name}]`);
+    for (const p of g.people) out.push(p.title ? `${p.name} | ${p.title}` : p.name);
   }
   const nl = process.platform === "win32" ? "\r\n" : "\n";
   return out.join(nl) + nl;
@@ -535,7 +521,7 @@ function serveStatic(req, res, pathname) {
 }
 
 // ---------- server ----------
-const server = http.createServer(async (req, res) => {
+const handleRequest = async (req, res) => {
   const url = new URL(req.url, "http://x");
   const p = url.pathname;
 
@@ -636,10 +622,7 @@ const server = http.createServer(async (req, res) => {
     if (!Array.isArray(b.groups)) return sendJSON(res, 400, { error: "expected groups" });
     const clean = { groups: b.groups.map((g) => ({
       name: String(g.name || "").trim() || "List",
-      people: (Array.isArray(g.people) ? g.people : []).map((x) => ({
-        name: String(x.name || "").trim(), title: String(x.title || "").trim(),
-        section: String(x.section || "").replace(/[\[\]\/]/g, " ").trim(),
-      }))
+      people: (Array.isArray(g.people) ? g.people : []).map((x) => ({ name: String(x.name || "").trim(), title: String(x.title || "").trim() }))
         .filter((x) => x.name || x.title),
     })) };
     try { fs.writeFileSync(PEOPLE_FILE, serializePeople(clean)); }
@@ -719,7 +702,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   serveStatic(req, res, p);
-});
+};
+const server = http.createServer(handleRequest);
 
 // Keep event streams alive through idle periods
 setInterval(() => { for (const res of clients) res.write(": ping\n\n"); }, 20000);
@@ -757,12 +741,13 @@ server.on("error", (err) => {
 process.title = "HTML Lower Thirds";
 
 // ---------- network access ----------
-// By default the app only listens on this computer (127.0.0.1), which never triggers a Windows
-// Firewall prompt. Turning on "Network access" in the control panel switches to all network
-// adapters so phones and other computers can connect; Windows asks about the firewall then.
-// Starts as this-computer-only every time. The control panel switch lasts until the app is
-// closed; put "allowNetwork": true in config.json to have it on from the start.
-let networkEnabled = config.allowNetwork === true || process.env.LT_NETWORK === "1";
+// The app always listens on this computer (127.0.0.1), which never triggers a Windows Firewall
+// prompt. Turning on "Network access" in the control panel adds listeners on this computer's
+// network addresses so phones and other computers can connect; Windows asks about the firewall
+// then. The local listener is never touched, so OBS stays connected while switching.
+// Starts as this-computer-only every time; "allowNetwork": true in config.json turns it on at start.
+let networkEnabled = false;
+let networkServers = [];
 function networkAddresses() {
   return Object.entries(os.networkInterfaces()).flatMap(([name, list]) =>
     (list || []).filter((i) => i.family === "IPv4" && !i.internal).map((i) => ({ name, ip: i.address })));
@@ -771,38 +756,42 @@ function isLocalRequest(req) {
   const a = req.socket.remoteAddress || "";
   return a === "127.0.0.1" || a === "::1" || a === "::ffff:127.0.0.1";
 }
-const bindHost = () => (networkEnabled ? "0.0.0.0" : "127.0.0.1");
 
-function setNetworkAccess(on) {
-  if (on === networkEnabled) return Promise.resolve("");
-  return new Promise((resolve) => {
-    const previous = networkEnabled;
-    networkEnabled = on;
-    // Re-open the server on the new address. Open pages (OBS overlay, control panels)
-    // reconnect by themselves within a second or two.
-    server.close();
-    server.closeAllConnections?.();
-    const onError = (err) => {
-      networkEnabled = previous;
-      server.listen(PORT, bindHost());
-      resolve("Couldn't switch network access (" + (err.code || err.message) + ")");
-    };
-    server.once("error", onError);
-    server.listen(PORT, bindHost(), () => {
-      server.off("error", onError);
-      console.log(on ? `\n  Network access ON. Other devices can use:` : "\n  Network access OFF: only this computer can connect.");
-      if (on) for (const n of networkAddresses()) console.log(`    http://${n.ip}:${PORT}/   (${n.name})`);
-      resolve("");
+async function setNetworkAccess(on) {
+  if (on === networkEnabled) return "";
+  if (!on) {
+    for (const s of networkServers) { s.close(); s.closeAllConnections?.(); }
+    networkServers = [];
+    networkEnabled = false;
+    console.log("\n  Network access OFF: only this computer can connect.");
+    return "";
+  }
+  const addrs = networkAddresses();
+  if (!addrs.length) return "No network connection found on this computer.";
+  const failures = [];
+  for (const a of addrs) {
+    const s = http.createServer(handleRequest);
+    const err = await new Promise((resolve) => {
+      s.once("error", resolve);
+      s.listen(PORT, a.ip, () => { s.off("error", resolve); resolve(null); });
     });
-  });
+    if (err) failures.push(`${a.ip} (${err.code || err.message})`);
+    else networkServers.push(s);
+  }
+  if (!networkServers.length) return "Couldn't open the network addresses: " + failures.join(", ");
+  networkEnabled = true;
+  console.log("\n  Network access ON. Other devices can use:");
+  for (const a of addrs) console.log(`    http://${a.ip}:${PORT}/   (${a.name})`);
+  if (failures.length) console.log("  Not available on: " + failures.join(", "));
+  return "";
 }
 
 let started = false;
-server.listen(PORT, bindHost(), () => {
+server.listen(PORT, "127.0.0.1", () => {
   if (started) return;
   started = true;
   // Network addresses, with the adapter name so virtual ones (Hyper-V, WSL, VPN) are easy to spot
-  const nets = networkEnabled ? networkAddresses() : [];
+  const nets = [];
   const line = (label, url, note = "") => console.log(`    ${label.padEnd(10)} ${url}${note ? "   (" + note + ")" : ""}`);
 
   console.log("\n  HTML Lower Thirds is running\n");
@@ -812,8 +801,7 @@ server.listen(PORT, bindHost(), () => {
   console.log("\n  CONTROL PANEL");
   line("Local:", `http://localhost:${PORT}/`);
   for (const n of nets) line("Network:", `http://${n.ip}:${PORT}/`, n.name);
-  if (!networkEnabled) console.log("    Network:   off. Turn on \"Network access\" in the control panel to use other devices.");
-  else if (!nets.length) console.log("    Network:   (no network connection found)");
+  console.log("    Network:   off. Turn on \"Network access\" in the control panel to use other devices.");
   console.log("\n  SERVICE ORDER SETUP");
   line("Local:", `http://localhost:${PORT}/setup.html`);
   for (const n of nets) line("Network:", `http://${n.ip}:${PORT}/setup.html`, n.name);
@@ -831,5 +819,6 @@ server.listen(PORT, bindHost(), () => {
   console.log("\n  Leave this window open while you use it. Close it (or press Ctrl+C) to stop.\n");
   // Open the control panel automatically (packaged app), unless "openBrowser": false in config.json
   if (config.openBrowser ?? IS_PACKAGED) openInBrowser(`http://localhost:${PORT}/`);
+  if (config.allowNetwork === true || process.env.LT_NETWORK === "1") setNetworkAccess(true).then((e) => e && console.log("  " + e));
 });
 

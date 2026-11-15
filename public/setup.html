@@ -68,8 +68,6 @@
   .gtabs button { flex: 1 1 auto; padding: 7px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
   .gtabs button.active { border-color: var(--accent); color: var(--text); background: #2a2721; }
   #ppl li .ttl { color: var(--muted); }
-  #ppl li.sechead { cursor: default; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); padding: 8px 8px 2px; }
-  #ppl li.sechead:hover { background: none; }
   #ppl li .x { visibility: hidden; }
   #ppl li:hover .x { visibility: visible; }
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: flex-start; justify-content: center; padding: 30px 10px; z-index: 10; }
@@ -116,11 +114,7 @@
             <label for="spSaveTo">Save to ward / list</label>
             <select id="spSaveTo"><option value="">Don't save</option></select>
           </div>
-          <div class="field" id="spSecField" hidden>
-            <label for="spSection">Subsection (optional)</label>
-            <input type="text" id="spSection" list="secList" placeholder="Bishopric, Relief Society, Primary…" autocomplete="off">
-            <datalist id="secList"></datalist>
-          </div>
+
           <button class="btn go" type="submit">Add speaker</button>
         </form>
       </div>
@@ -129,13 +123,13 @@
         <h2>Saved people</h2>
         <div class="gtabs" id="gtabs"></div>
         <div class="row" style="margin-top:6px;gap:6px">
-          <button class="btn ghost small" id="gNew" type="button">+ New list</button>
+          <button class="btn go small" id="gNew" type="button">+ Add ward list</button>
           <button class="btn ghost small" id="gRename" type="button">Rename</button>
           <button class="btn ghost small" id="gDelete" type="button">Delete list</button>
         </div>
         <input type="text" id="pplQ" placeholder="Filter…" autocomplete="off" style="margin-top:8px">
         <ul class="results" id="ppl"></ul>
-        <div class="hint" style="margin-top:6px">Click someone to add them to the service. Save new people with “Save to ward / list” above, or with ☆ on a speaker in the service order. Make a list for each ward with + New list.</div>
+        <div class="hint" style="margin-top:6px">Click someone to add them to the service. Save new people with “Save to ward / list” above, or with ☆ on a speaker in the service order. Add a list for each ward with + Add ward list.</div>
       </div>
 
       <div class="card">
@@ -367,7 +361,7 @@
     items.push({ type: "speaker", name, title });
     const gi = $("spSaveTo").value;
     if (gi !== "" && people.groups[gi]) {
-      savePerson(people.groups[gi], name, title, $("spSection").value.replace(/[\[\]\/]/g, " ").trim());
+      savePerson(people.groups[gi], name, title);
       activeGroup = Number(gi);
       savePeople();
     }
@@ -377,25 +371,10 @@
 
   // ---------- saved people lists ----------
   let people = { groups: [] }, activeGroup = 0;
-  const COMMON_SECTIONS = ["Bishopric", "Stake Presidency", "High Council", "Elders Quorum", "Relief Society",
-    "Young Men", "Young Women", "Primary", "Sunday School", "Music", "Clerks and Secretaries"];
-  function sectionsOf(g) {
-    const used = [];
-    for (const p of (g ? g.people : [])) if (p.section && !used.includes(p.section)) used.push(p.section);
-    return used;
-  }
-  function fillSectionList(g) {
-    const used = sectionsOf(g);
-    $("secList").innerHTML = "";
-    for (const n of [...used, ...COMMON_SECTIONS.filter(c => !used.includes(c))]) {
-      const o = document.createElement("option"); o.value = n; $("secList").appendChild(o);
-    }
-  }
-  // Add or update someone in a list (matched by name), with an optional subsection
-  function savePerson(g, name, title, section) {
+  // Add or update someone in a list (matched by name)
+  function savePerson(g, name, title) {
     const dupe = g.people.find(p => p.name.toLowerCase() === name.toLowerCase());
-    if (dupe) { dupe.title = title; dupe.section = section; }
-    else g.people.push({ name, title, section });
+    if (dupe) dupe.title = title; else g.people.push({ name, title });
   }
   function renderPeople() {
     if (activeGroup >= people.groups.length) activeGroup = Math.max(0, people.groups.length - 1);
@@ -420,20 +399,11 @@
     ul.innerHTML = "";
     if (!g) return;
     const q = $("pplQ").value.trim().toLowerCase();
-    const order = ["", ...sectionsOf(g)];
-    const list = g.people.map((p, i) => ({ ...p, section: p.section || "", i }))
-      .filter(p => !q || (p.name + " " + p.title + " " + p.section).toLowerCase().includes(q))
-      .sort((a, b) => order.indexOf(a.section) - order.indexOf(b.section) || a.name.localeCompare(b.name));
+    // Same order as in Leadership.txt (so a presidency can be listed first)
+    const list = g.people.map((p, i) => ({ ...p, i }))
+      .filter(p => !q || (p.name + " " + p.title).toLowerCase().includes(q));
     if (!list.length) ul.innerHTML = `<li class="empty">${g.people.length ? "No matches." : "No one saved here yet."}</li>`;
-    let lastSec = null;
     for (const p of list) {
-      if (p.section !== lastSec && (p.section || lastSec !== null)) {
-        const h = document.createElement("li");
-        h.className = "sechead";
-        h.textContent = p.section || "General";
-        ul.appendChild(h);
-      }
-      lastSec = p.section;
       const li = document.createElement("li");
       li.innerHTML = `<span><span class="n"></span> <span class="ttl"></span></span><button class="btn ghost small x" title="Remove from list">✕</button>`;
       li.querySelector(".n").textContent = p.name;
@@ -454,16 +424,11 @@
     await fetch("/api/people", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(people) });
   }
   $("pplQ").oninput = renderPeople;
-  $("spSaveTo").onchange = () => {
-    const g = people.groups[$("spSaveTo").value];
-    $("spSecField").hidden = !g;
-    if (g) fillSectionList(g);
-  };
 
   // One list per ward (plus Stake Leaders): add, rename and delete lists
   const listNameOk = n => n && !people.groups.some(g => g.name.toLowerCase() === n.toLowerCase());
   $("gNew").onclick = () => {
-    const n = (prompt("Name for the new list (for example: Arvada 1st Ward):") || "").replace(/[\[\]]/g, "").trim();
+    const n = (prompt("Ward name for the new list (for example: Arvada 1st Ward):") || "").replace(/[\[\]]/g, "").trim();
     if (!n) return;
     if (!listNameOk(n)) { alert(`There's already a list called "${n}".`); return; }
     people.groups.push({ name: n, people: [] });
@@ -571,11 +536,7 @@
         sel.onchange = () => {
           const g = people.groups[sel.value];
           if (!g || !(it.name || it.title)) { sel.value = ""; return; }
-          const known = sectionsOf(g);
-          const sec = prompt(`Subsection in ${g.name} (optional), for example ` +
-            (known.length ? known.slice(0, 4).join(", ") : "Bishopric, Relief Society, Primary") + ":", "");
-          if (sec === null) { sel.value = ""; return; }
-          savePerson(g, it.name.trim(), it.title.trim(), sec.replace(/[\[\]\/]/g, " ").trim());
+          savePerson(g, it.name.trim(), it.title.trim());
           activeGroup = Number(sel.value);
           savePeople();
           setStatus(`Saved ${it.name || "speaker"} to ${g.name}.`);

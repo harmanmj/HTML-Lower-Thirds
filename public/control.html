@@ -85,6 +85,9 @@
   .netbtn { font: inherit; font-size: 12px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
   .netbtn.on { border-color: var(--go); color: var(--text); }
   #netList li { font-family: ui-monospace, Consolas, monospace; font-size: 13px; user-select: all; }
+  .slist { max-height: 360px; overflow-y: auto; margin-top: 8px; }
+  .keys { font-size: 12px; color: var(--muted); margin: -6px 0 10px; }
+  .keys b { color: var(--text); font-weight: 600; }
   .filebar { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 8px; }
   .filebar .hint { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
   .warn { color: #f0b35a; }
@@ -124,10 +127,10 @@
     <span class="tag">OFF AIR</span>
     <span class="what" id="onairWhat">Nothing on screen</span>
   </div>
+  <div class="keys" id="keysInfo"></div>
 
   <div class="tabs modes" id="modes">
     <button type="button" data-mode="speakers">Service</button>
-    <button type="button" data-mode="lyrics">Lyrics</button>
     <button type="button" data-mode="setup">Setup</button>
   </div>
   <div id="mode-speakers">
@@ -168,6 +171,26 @@
     <div class="hint"><kbd>Enter</kbd> show · <kbd>Esc</kbd> hide</div>
   </div>
 
+  <div class="card presets" id="lyricsCard">
+    <h2>Song lyrics</h2>
+    <div class="field">
+      <input type="text" id="songFilter" placeholder="Find a song by number or title, then Enter…" style="margin-bottom:6px">
+      <select id="songSel"></select>
+    </div>
+    <div class="actions" style="grid-template-columns:1fr 1fr 1fr">
+      <button type="button" class="btn ghost" id="lyPrev">◀ Prev</button>
+      <button type="button" class="btn show" id="lyNext">Next ▶</button>
+      <button type="button" class="btn hide" id="lyClear">Clear</button>
+    </div>
+    <div class="hint">For songs that aren't in the service order. Once you pick a song here, <kbd>→</kbd> <kbd>Space</kbd> <kbd>←</kbd> step through it; clicking a line in the service order hands them back.</div>
+    <ul class="plist slist" id="slist"></ul>
+    <div class="hint" id="sdir"></div>
+    <div class="filebar" id="syncBar" hidden>
+      <span class="hint" id="syncInfo"></span>
+      <button class="btn ghost" id="syncBtn" type="button">Update songs</button>
+    </div>
+  </div>
+
 
   <div class="card presets">
     <h2>Presets <button class="btn ghost" id="savePreset" type="button">+ Save current</button></h2>
@@ -179,29 +202,6 @@
     <iframe id="setupFrame" title="Service order setup" style="width:100%;border:0;display:block;min-height:400px"></iframe>
   </div>
 
-  <div id="mode-lyrics" hidden>
-    <div class="card">
-      <div class="field">
-        <label for="songFilter">Song</label>
-        <input type="text" id="songFilter" placeholder="Filter by number or title…" style="margin-bottom:6px">
-        <select id="songSel"></select>
-      </div>
-      <div class="actions" style="grid-template-columns:1fr 1fr 1fr">
-        <button type="button" class="btn ghost" id="lyPrev">◀ Prev</button>
-        <button type="button" class="btn show" id="lyNext">Next ▶</button>
-        <button type="button" class="btn hide" id="lyClear">Clear</button>
-      </div>
-      <div class="hint"><kbd>→</kbd> <kbd>Space</kbd> next · <kbd>←</kbd> previous · <kbd>Esc</kbd> clear · click a slide to show it</div>
-    </div>
-    <div class="card presets">
-      <ul class="plist" id="slist"></ul>
-      <div class="hint" id="sdir"></div>
-      <div class="filebar" id="syncBar" hidden>
-        <span class="hint" id="syncInfo"></span>
-        <button class="btn ghost" id="syncBtn" type="button">Update songs</button>
-      </div>
-    </div>
-  </div>
 </div>
 
 <div class="modal" id="netDlg" hidden>
@@ -382,7 +382,7 @@
         li.title = "Click to show. Double-click to load it into the form below for editing.";
         li.ondblclick = () => switchTo(item.template, item.fields);
       }
-      li.onclick = () => api("/api/rundown/show", { i, autoHide: Number($("autoHide").value) || 0 });
+      li.onclick = () => { setArrowTarget("service"); api("/api/rundown/show", { i, autoHide: Number($("autoHide").value) || 0 }); };
       ul.appendChild(li);
     });
     currentFile = r.file;
@@ -392,8 +392,8 @@
     const on = ul.querySelector("li.on");
     if (on) on.scrollIntoView({ block: "nearest" });
   }
-  $("nextBtn").onclick = () => api("/api/next", { autoHide: Number($("autoHide").value) || 0 });
-  $("prevBtn").onclick = () => api("/api/prev", { autoHide: Number($("autoHide").value) || 0 });
+  $("nextBtn").onclick = () => { setArrowTarget("service"); api("/api/next", { autoHide: Number($("autoHide").value) || 0 }); };
+  $("prevBtn").onclick = () => { setArrowTarget("service"); api("/api/prev", { autoHide: Number($("autoHide").value) || 0 }); };
 
   // ---------- network access (other devices) ----------
   let net = { enabled: false, local: true, addresses: [] };
@@ -464,21 +464,32 @@
   $("bclose").onclick = () => { $("browser").hidden = true; };
   $("browser").onclick = e => { if (e.target.id === "browser") $("browser").hidden = true; };
 
-  // Arrow keys step through the service order on the Service tab
+  // Arrow keys step through the service order, or through a song picked in "Song lyrics"
+  // (whichever was used last)
+  let arrowTarget = "service";
+  function setArrowTarget(t) {
+    arrowTarget = t;
+    $("keysInfo").innerHTML = t === "lyrics"
+      ? `<kbd>→</kbd> <kbd>←</kbd> control: <b>Song lyrics</b> (click a service line to switch back)`
+      : `<kbd>→</kbd> <kbd>←</kbd> control: <b>Service order</b>`;
+  }
+  setArrowTarget("service");
   document.addEventListener("keydown", e => {
     if (mode !== "speakers" || !$("browser").hidden || !$("netDlg").hidden || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
-    const autoHide = Number($("autoHide").value) || 0;
-    if (["ArrowRight", "ArrowDown", " ", "PageDown"].includes(e.key)) { e.preventDefault(); api("/api/next", { autoHide }); }
-    if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); api("/api/prev", { autoHide }); }
+    const next = ["ArrowRight", "ArrowDown", " ", "PageDown"].includes(e.key);
+    const prev = ["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key);
+    if (!next && !prev) return;
+    e.preventDefault();
+    if (arrowTarget === "lyrics") api(next ? "/api/lyrics/next" : "/api/lyrics/prev", {});
+    else api(next ? "/api/next" : "/api/prev", { autoHide: Number($("autoHide").value) || 0 });
   });
 
-  // ---------- mode switch: speakers / lyrics ----------
+  // ---------- tabs: Service / Setup ----------
   let mode = "speakers";
   function setMode(m) {
     mode = m;
     document.querySelectorAll("#modes button").forEach(b => b.classList.toggle("active", b.dataset.mode === m));
     $("mode-speakers").hidden = m !== "speakers";
-    $("mode-lyrics").hidden = m !== "lyrics";
     $("mode-setup").hidden = m !== "setup";
     document.body.classList.toggle("wide", m === "setup");
     if (m === "setup") openSetup();
@@ -500,7 +511,7 @@
   }
   $("editBtn").onclick = () => setMode("setup");
   document.querySelectorAll("#modes button").forEach(b => b.onclick = () => setMode(b.dataset.mode));
-  try { setMode(localStorage.getItem("lt-mode") || "speakers"); } catch { setMode("speakers"); }
+  try { const m = localStorage.getItem("lt-mode"); setMode(m === "setup" ? "setup" : "speakers"); } catch { setMode("speakers"); }
 
   // ---------- lyrics ----------
   let songs = { list: [], slides: [], pos: -1 };
@@ -533,7 +544,7 @@
   $("songFilter").onkeydown = e => {
     if (e.key === "Enter") {
       const opt = [...$("songSel").options].find(o => o.value && o.value !== songs.current) || [...$("songSel").options].find(o => o.value);
-      if (opt) api("/api/lyrics/song", { name: opt.value });
+      if (opt) { setArrowTarget("lyrics"); api("/api/lyrics/song", { name: opt.value }); }
       e.target.blur();
     }
   };
@@ -567,22 +578,17 @@
       li.innerHTML = `<div class="stext"><span class="pill"></span><span class="t"></span></div>`;
       li.querySelector(".pill").textContent = sl.label || `Slide ${i + 1}`;
       li.querySelector(".t").textContent = sl.text;
-      li.onclick = () => api("/api/lyrics/show", { i });
+      li.onclick = () => { setArrowTarget("lyrics"); api("/api/lyrics/show", { i }); };
       ul.appendChild(li);
     });
     $("sdir").textContent = (sg.current ? sg.title + "  ·  " : "") + sg.list.length + " songs";
     const on = ul.querySelector("li.on");
     if (on) on.scrollIntoView({ block: "nearest" });
   }
-  $("songSel").onchange = e => { if (e.target.value) api("/api/lyrics/song", { name: e.target.value }); };
-  $("lyNext").onclick = () => api("/api/lyrics/next", {});
-  $("lyPrev").onclick = () => api("/api/lyrics/prev", {});
+  $("songSel").onchange = e => { if (e.target.value) { setArrowTarget("lyrics"); api("/api/lyrics/song", { name: e.target.value }); } };
+  $("lyNext").onclick = () => { setArrowTarget("lyrics"); api("/api/lyrics/next", {}); };
+  $("lyPrev").onclick = () => { setArrowTarget("lyrics"); api("/api/lyrics/prev", {}); };
   $("lyClear").onclick = () => api("/api/hide", {});
-  document.addEventListener("keydown", e => {
-    if (mode !== "lyrics" || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
-    if (["ArrowRight", "ArrowDown", " ", "PageDown"].includes(e.key)) { e.preventDefault(); api("/api/lyrics/next", {}); }
-    if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); api("/api/lyrics/prev", {}); }
-  });
   // after choosing a song, hand the arrow keys back to the slide list
   $("songSel").addEventListener("change", e => e.target.blur());
 

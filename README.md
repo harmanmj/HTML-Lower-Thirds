@@ -77,8 +77,8 @@ song | 1 - the morning breaks
 
 Builds a service without editing text files by hand. It's also available on its own at `http://localhost:3000/setup.html`.
 
-- **Speakers:** type a name and title. Pick a ward under "Save to ward / list" to keep them in that ward's list, optionally in a **subsection** (Bishopric, Relief Society, Primary, …: pick a suggestion or type your own). **☆ Save to…** does the same for any speaker already in the service.
-- **Leadership lists:** **Stake Leaders** plus one list per ward. **+ New list** adds a ward (for example *Arvada 1st Ward*); **Rename** and **Delete list** manage the selected list.
+- **Speakers:** type a name and title. Pick a ward under "Save to ward / list" to keep them in that ward's list. **☆ Save to…** does the same for any speaker already in the service.
+- **Leadership lists:** **Stake Leaders** plus one list per ward. **+ Add ward list** adds a ward (for example *Arvada 1st Ward*); **Rename** and **Delete list** manage the selected list.
 - **Saved people:** click someone to add them to the service.
 - **Songs:** search by hymn number or title; use ↑ ↓ and Enter to pick.
 - **Reorder** by dragging the numbers or with ▲ ▼; ✕ removes an item. Speaker names can be edited in place.
@@ -93,24 +93,19 @@ The saved people lists, editable by hand too:
 President Hale | Stake President
 
 [Arvada 1st Ward]
-Brother Kim | Ward Clerk
-
-[Arvada 1st Ward / Bishopric]
 Bishop Allen | Bishop
 Brother Diaz | First Counselor
-
-[Arvada 1st Ward / Relief Society]
 Sister Lopez | Relief Society President
 
-[Arvada 2nd Ward / Bishopric]
+[Arvada 2nd Ward]
 Bishop Ruiz | Bishop
 ```
 
-Each `[Name]` is one list (the stake, or a ward); `[Name / Subsection]` puts people in a subsection of that list. Add a heading (or use **+ New list**) for each ward.
+Each `[Name]` is one list: the stake, or a ward. Add a heading (or use **+ Add ward list**) for each ward.
 
-## Lyrics tab
+## Song lyrics (on the Service tab)
 
-For songs outside the service order: pick a song (type a number or title in the filter, then Enter) and step through it with **→ / Space**, **←** and **Esc**.
+For songs that aren't in the service order, use the **Song lyrics** section under the name and title form: type a number or title in the box and press Enter, then step through it with **→ / Space**, **←** and **Esc**. Once you pick a song there, the arrow keys control that song; clicking a line in the service order hands them back. The line under the On Air box shows which one the arrow keys control.
 
 ### Song files
 
@@ -150,7 +145,7 @@ line two
 }
 ```
 
-- **songSources:** folders to copy songs from, for example on OneDrive. Their song files are copied into `Songs\<folder name>` inside `Documents\HTML Lower Thirds`, and the app plays the copies, so songs keep working when OneDrive is offline. New and changed files are copied when the app starts, every 5 minutes, and when you click **Update songs** on the Lyrics tab. Each folder becomes a group in the song list. Use `%OneDrive%`, `%USERPROFILE%` or `~` so the same settings work on every computer.
+- **songSources:** folders to copy songs from, for example on OneDrive. Their song files are copied into `Songs\<folder name>` inside `Documents\HTML Lower Thirds`, and the app plays the copies, so songs keep working when OneDrive is offline. New and changed files are copied when the app starts, every 5 minutes, and when you click **Update songs** in the Song lyrics section. Each folder becomes a group in the song list. Use `%OneDrive%`, `%USERPROFILE%` or `~` so the same settings work on every computer.
 - **songFolders:** use this instead to read songs straight from folders without copying them.
 - **Paths:** relative paths are inside `Documents\HTML Lower Thirds`. In JSON, Windows paths need double backslashes (`\\`).
 - **openBrowser:** opens the control panel automatically when the app starts.
@@ -175,7 +170,7 @@ GET works for all of these, so Stream Deck "Website" buttons and Bitfocus Compan
 |---|---|
 | `/api/next`, `/api/prev` | Next / previous item in the service order |
 | `/api/rundown/show?i=0` | Show service item `i` (counting from 0) |
-| `/api/lyrics/song?name=1003` | Choose a song on the Lyrics tab |
+| `/api/lyrics/song?name=1003` | Choose a song in the Song lyrics section |
 | `/api/lyrics/next`, `/api/lyrics/prev` | Next / previous lyric slide |
 | `/api/show?preset=Jane` | Show a saved preset |
 | `/api/hide` | Clear the screen |
