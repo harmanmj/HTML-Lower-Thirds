@@ -242,6 +242,8 @@ function browse(dir) {
 // names the song and is shown as its first slide. A blank line also starts a new section.
 // Each section is split into slides of `linesPerSlide` lines. Lines starting with # are ignored.
 const DEFAULT_SONGS_DIR = path.join(DATA_DIR, "Songs");
+// Song files are .txt files; names starting with "_" (like _credits.txt) are notes, not songs
+const isSongFile = (f) => f.toLowerCase().endsWith(".txt") && !f.startsWith("_");
 
 // "songSources": folders (for example on OneDrive) whose song files are copied into
 // Documents\HTML Lower Thirds\Songs\<folder name>, so the app has its own copy that
@@ -262,7 +264,7 @@ function syncSongs() {
     for (const src of SONG_SOURCES) {
       const dest = sourceCopyDir(src);
       let files;
-      try { files = (await fs.promises.readdir(src)).filter((f) => f.toLowerCase().endsWith(".txt")); }
+      try { files = (await fs.promises.readdir(src)).filter(isSongFile); }
       catch { sources.push({ folder: src, ok: false, files: 0 }); continue; } // offline or not signed in: keep using the copies
       await fs.promises.mkdir(dest, { recursive: true });
       for (const f of files) {
@@ -360,7 +362,7 @@ function scanSongs(force) {
   for (const dir of SONG_DIRS) {
     const group = path.basename(dir);
     let files;
-    try { files = fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith(".txt")); }
+    try { files = fs.readdirSync(dir).filter(isSongFile); }
     catch { missing.push(dir); continue; }
     files.sort(naturalSort).forEach((f) => {
       const id = group + "/" + f.slice(0, -4);
