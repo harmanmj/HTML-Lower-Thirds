@@ -46,7 +46,20 @@ function documentsFolder() {
   }
   return path.join(os.homedir(), "Documents");
 }
-const DATA_DIR = path.resolve(process.env.LT_DATA_DIR || path.join(documentsFolder(), "HTML Lower Thirds"));
+function findDataDir() {
+  if (process.env.LT_DATA_DIR) return process.env.LT_DATA_DIR;
+  const docs = path.join(documentsFolder(), "HTML Lower Thirds");
+  if (fs.existsSync(docs)) return docs;
+  // On a computer whose Documents folder isn't in OneDrive, use the folder that
+  // OneDrive synced from another computer, so settings, services and lists match
+  for (const od of [process.env.OneDrive, process.env.OneDriveConsumer, process.env.OneDriveCommercial]) {
+    if (!od) continue;
+    const synced = path.join(od, "Documents", "HTML Lower Thirds");
+    if (fs.existsSync(path.join(synced, "config.json"))) return synced;
+  }
+  return docs;
+}
+const DATA_DIR = path.resolve(findDataDir());
 fs.mkdirSync(path.join(DATA_DIR, "Services"), { recursive: true });
 
 // Paths in config.json may use %OneDrive%, %USERPROFILE%, ~ etc.; relative paths are inside DATA_DIR
@@ -60,7 +73,7 @@ function expandPath(p) {
 
 const TEMPLATES = loadModuleAsset("public/templates.js");
 
-const PORT = Number(process.env.PORT) || 3000;
+let PORT = Number(process.env.PORT) || 3000; // can also be set with "port" in config.json
 const PRESETS_FILE = path.join(DATA_DIR, "presets.json");
 // Settings from config.json (see config.example.json)
 const CONFIG_FILE = path.join(DATA_DIR, "config.json");
@@ -80,6 +93,8 @@ if (fs.existsSync(CONFIG_FILE)) {
   try { config = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8")); }
   catch (e) { configError = e.message; }
 }
+
+if (!process.env.PORT && Number(config.port)) PORT = Number(config.port);
 
 // Text file to read lower thirds from. First match wins:
 //   node server.js "C:\path\to\file.txt"  >  DATA_FILE env  >  "lowerThirdsFile" in config.json  >  ./lowerthirds.txt
@@ -236,32 +251,39 @@ const SONG_SOURCES = (Array.isArray(config.songSources) ? config.songSources : [
 const sourceCopyDir = (src) => path.join(DEFAULT_SONGS_DIR, path.basename(src));
 let lastSync = { at: null, copied: 0, sources: [] };
 
+let syncing = null;
+// Copies new and changed song files. Runs in the background: on a new computer OneDrive may
+// need to download each file first, which can take a while for a whole hymnbook.
 function syncSongs() {
-  let copied = 0;
-  const sources = [];
-  for (const src of SONG_SOURCES) {
-    const dest = sourceCopyDir(src);
-    let files;
-    try { files = fs.readdirSync(src).filter((f) => f.toLowerCase().endsWith(".txt")); }
-    catch { sources.push({ folder: src, ok: false, files: 0 }); continue; } // offline or not signed in: keep using the copies
-    fs.mkdirSync(dest, { recursive: true });
-    for (const f of files) {
-      const from = path.join(src, f), to = path.join(dest, f);
-      try {
-        const a = fs.statSync(from);
-        let b = null;
-        try { b = fs.statSync(to); } catch {}
-        if (!b || b.size !== a.size || a.mtimeMs > b.mtimeMs + 1000) {
-          fs.copyFileSync(from, to);
-          fs.utimesSync(to, a.atime, a.mtime);
-          copied++;
-        }
-      } catch {}
+  if (syncing) return syncing;
+  syncing = (async () => {
+    let copied = 0;
+    const sources = [];
+    for (const src of SONG_SOURCES) {
+      const dest = sourceCopyDir(src);
+      let files;
+      try { files = (await fs.promises.readdir(src)).filter((f) => f.toLowerCase().endsWith(".txt")); }
+      catch { sources.push({ folder: src, ok: false, files: 0 }); continue; } // offline or not signed in: keep using the copies
+      await fs.promises.mkdir(dest, { recursive: true });
+      for (const f of files) {
+        const from = path.join(src, f), to = path.join(dest, f);
+        try {
+          const a = await fs.promises.stat(from);
+          const b = await fs.promises.stat(to).catch(() => null);
+          if (!b || b.size !== a.size || a.mtimeMs > b.mtimeMs + 1000) {
+            await fs.promises.copyFile(from, to);
+            await fs.promises.utimes(to, a.atime, a.mtime);
+            copied++;
+          }
+        } catch {}
+      }
+      sources.push({ folder: src, ok: true, files: files.length });
     }
-    sources.push({ folder: src, ok: true, files: files.length });
-  }
-  lastSync = { at: Date.now(), copied, sources };
-  return lastSync;
+    lastSync = { at: Date.now(), copied, sources };
+    if (copied) console.log(`  Copied ${copied} new or changed song file(s) from your song sources.`);
+    return lastSync;
+  })().finally(() => { syncing = null; });
+  return syncing;
 }
 
 // Where songs are read from: "songFolders" if set, otherwise the copies of "songSources",
@@ -271,9 +293,9 @@ const SONG_DIRS = (Array.isArray(config.songFolders) && config.songFolders.lengt
   : SONG_SOURCES.length ? SONG_SOURCES.map(sourceCopyDir)
   : [process.env.SONGS_DIR ? expandPath(process.env.SONGS_DIR) : DEFAULT_SONGS_DIR]);
 if (SONG_SOURCES.length) {
-  const r = syncSongs();
-  if (r.copied) console.log(`  Copied ${r.copied} song file(s) from your song sources.`);
-  setInterval(() => { if (syncSongs().copied) scanSongs(); }, 5 * 60 * 1000);
+  for (const src of SONG_SOURCES) fs.mkdirSync(sourceCopyDir(src), { recursive: true });
+  // First copy starts right after start-up (see server.listen); then every 5 minutes
+  setInterval(() => syncSongs().then((r) => { if (r.copied) scanSongs(true); }), 5 * 60 * 1000);
 }
 const LINES_PER_SLIDE = Number(config.linesPerSlide) || 2;
 
@@ -356,7 +378,7 @@ function scanSongs(force) {
   songs.missing = missing;
   loadCurrentSong();
   broadcast("songs", songs);
-  if (!force) loadRundown(); // song list or a song in the service order changed
+  loadRundown(); // song list or a song in the service order changed
 }
 
 function selectSong(id) {
@@ -545,7 +567,7 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/songs") return sendJSON(res, 200, { ...songs, sync: lastSync, hasSources: SONG_SOURCES.length > 0 });
   // POST /api/songs/sync -> copy new and changed songs from "songSources" now
   if (p === "/api/songs/sync") {
-    const r = syncSongs();
+    const r = await syncSongs();
     scanSongs(true);
     return sendJSON(res, 200, r);
   }
@@ -708,7 +730,11 @@ server.listen(PORT, "0.0.0.0", () => {
   if (configError) console.log(`\n  WARNING: config.json could not be read (${configError}). Using defaults.\n  Check for missing commas, and use double backslashes (\\\\) in Windows paths.`);
   console.log(`\n  Lower thirds file: ${DATA_FILE}${fs.existsSync(DATA_FILE) ? "" : "   (FILE NOT FOUND)"}`);
   for (const d of SONG_DIRS) console.log(`  Songs folder:      ${d}${fs.existsSync(d) ? "" : "   (FOLDER NOT FOUND)"}`);
-  for (const src of lastSync.sources) console.log(`  Songs copied from: ${src.folder}${src.ok ? `   (${src.files} songs)` : "   (NOT AVAILABLE: using the copies already saved)"}`);
+  for (const src of SONG_SOURCES) console.log(`  Songs copied from: ${src}${fs.existsSync(src) ? "" : "   (NOT AVAILABLE: using the copies already saved)"}`);
+  if (SONG_SOURCES.length) {
+    console.log("  Checking for new or changed songs in the background...");
+    syncSongs().then((r) => { scanSongs(true); console.log(`  Songs up to date (${r.sources.filter((x) => x.ok).reduce((n, x) => n + x.files, 0)} in your song sources).`); });
+  }
   console.log(`  Leadership file:   ${PEOPLE_FILE}`);
   console.log(`  Your files:        ${DATA_DIR}`);
   console.log("\n  Leave this window open while you use it. Close it (or press Ctrl+C) to stop.\n");

@@ -13,7 +13,7 @@ Lower thirds, song lyrics and whole service orders for OBS, run from a control p
 1. Download **HTML-Lower-Thirds-Windows.exe** (or the Linux version) from the [Releases](../../releases) page.
 2. Put it anywhere you like, such as your Desktop, and double-click it.
    - Windows may show "Windows protected your PC" because the app isn't signed. Click **More info → Run anyway**.
-   - The first time, Windows Firewall may ask about network access. Allowing it lets other computers and phones on your network reach the control panel. If you don't have admin rights, click **Cancel**: everything still works on this computer.
+   - The first time, Windows Firewall may ask about network access. If you don't have admin rights, click **Cancel**: everything still works on this computer.
 3. The control panel opens in your browser. Leave the black window open while you use it, and close it to stop.
 
 The window lists every address you need: the overlay, the control panel and the setup page, both on this computer (Local) and for other devices (Network).
@@ -21,6 +21,15 @@ The window lists every address you need: the overlay, the control panel and the 
 ### Running from source instead
 
 With [Node.js](https://nodejs.org) 18 or newer: double-click `start.bat` (Windows), or run `./start.sh` / `node server.js`. No `npm install` is needed.
+
+### Using it from other computers and phones
+
+Using the app on the computer it runs on never needs admin rights. For other devices to reach it, Windows Firewall has to allow it, and only an administrator can add that rule, whichever port is used. It only needs doing once per computer:
+
+- Download **Allow-Network-Access.bat** from the same release and have an administrator double-click it. It opens the app's port (3000) on private and work networks, and keeps working after app updates.
+- Or click **Allow access** on the Windows Firewall prompt the first time the app runs, if you're an administrator.
+
+If port 3000 is already in use, set `"port": 3001` in `config.json`, and run `Allow-Network-Access.bat 3001`.
 
 ## Your files
 
@@ -138,6 +147,7 @@ line two
 - **songFolders:** use this instead to read songs straight from folders without copying them.
 - **Paths:** relative paths are inside `Documents\HTML Lower Thirds`. In JSON, Windows paths need double backslashes (`\\`).
 - **openBrowser:** opens the control panel automatically when the app starts.
+- **port:** the port to use (default 3000). Restart the app after changing it.
 - **Applying changes:** restart the app after editing this file. If it can't read `config.json`, the window says so.
 
 ## Templates and look

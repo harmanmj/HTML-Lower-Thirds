@@ -88,6 +88,10 @@ jobs:
         with:
           path: out
           merge-multiple: true
+      - uses: actions/checkout@v4
+        with:
+          path: src
+      - run: cp src/Allow-Network-Access.bat out/
       - name: Replace the earlier build of this pre-release
         if: needs.version.outputs.prerelease == 'true' && !startsWith(github.ref, 'refs/tags/')
         env:
