@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lower Thirds Overlay</title>
+<!-- No animation here: lower thirds appear and disappear instantly.
+     Animate with OBS (show/hide transitions, Move plugin, etc.). -->
+<style>
+  html, body {
+    margin: 0; width: 1920px; height: 1080px;
+    background: transparent; overflow: hidden;
+  }
+
+  .lt { position: absolute; display: none; }
+  .lt.live { display: flex; }
+
+  /* ---------- Speaker template (name + title) ---------- */
+  #tpl-person {
+    --sp-bg: #001f3f;
+    --sp-text: #ffffff;
+    --sp-pad: 16px;          /* text inset from the left edge of the boxes */
+    left: 96px; top: 864px;
+    width: 480px; flex-direction: column;
+    font-family: 'Arial', sans-serif;
+  }
+  #tpl-person .panel {
+    background: var(--sp-bg); color: var(--sp-text);
+    width: 480px; padding: 0 var(--sp-pad);
+    box-sizing: border-box; overflow: hidden;
+  }
+  #tpl-person .name-box  { height: 54px; }
+  #tpl-person .title-box { height: 27px; }
+  #tpl-person .name  { font-size: 48px; line-height: 54px; white-space: nowrap; }
+  #tpl-person .title { font-size: 24px; line-height: 27px; white-space: nowrap; }
+
+  /* ---------- Lyrics template ---------- */
+  #tpl-lyrics {
+    --ly-text: #ffffff;          /* text colour (not in specs: white) */
+    --ly-stroke: #000000;        /* outline colour (not in specs: black) */
+    left: 0px; top: 810px;
+    width: 1920px; height: 216px;
+    padding: 0px; box-sizing: border-box;
+    background-color: rgb(0 31 63 / 0.7);
+    border: 0px solid #000000; border-radius: 0px;
+    box-shadow: 2px 2px 8px 0 rgb(0 0 0 / 0.5);
+    opacity: 1;
+    align-items: center; justify-content: center;
+  }
+  #tpl-lyrics .lyrics {
+    width: 100%; max-height: 100%; overflow: hidden;
+    color: var(--ly-text);
+    font-family: 'Arial', sans-serif;
+    font-size: 72px; font-weight: bold; line-height: 1.1em;
+    -webkit-text-stroke-width: 10px;
+    -webkit-text-stroke-color: var(--ly-stroke);
+    paint-order: stroke fill;    /* outline sits behind the letters so they stay full weight */
+    text-shadow: 0px 0px 0px #000000;
+    text-align: center; white-space: pre-line;   /* keep the song file's line breaks */
+  }
+</style>
+</head>
+<body>
+
+  <!-- Speaker template (template key "person") -->
+  <div class="lt" id="tpl-person">
+    <div class="panel name-box"><div class="name" data-field="name" data-fit></div></div>
+    <div class="panel title-box"><div class="title" data-field="title" data-fit></div></div>
+  </div>
+
+  <!-- Lyrics template -->
+  <div class="lt" id="tpl-lyrics">
+    <div class="lyrics" data-field="text" data-fit-box></div>
+  </div>
+
+<script>
+  let lastTs = 0;
+
+  function fill(el, fields) {
+    el.querySelectorAll("[data-field]").forEach(f => {
+      f.textContent = (fields && fields[f.dataset.field]) || "";
+    });
+    // Shrink long text so it stays inside the fixed-width boxes
+    el.querySelectorAll("[data-fit]").forEach(f => {
+      f.style.fontSize = "";
+      const box = f.parentElement;
+      const avail = box.clientWidth - parseFloat(getComputedStyle(box).paddingLeft) * 2;
+      let size = parseFloat(getComputedStyle(f).fontSize);
+      while (f.scrollWidth > avail && size > 10) f.style.fontSize = (--size) + "px";
+    });
+    // Shrink multi-line text until it fits its box in both directions
+    el.querySelectorAll("[data-fit-box]").forEach(f => {
+      f.style.fontSize = "";
+      const box = f.parentElement, cs = getComputedStyle(box);
+      const maxH = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      let size = parseFloat(getComputedStyle(f).fontSize);
+      while ((f.scrollHeight > maxH || f.scrollWidth > f.clientWidth) && size > 10) f.style.fontSize = (--size) + "px";
+    });
+  }
+
+  function apply(s) {
+    if (s.ts && s.ts <= lastTs) return;
+    lastTs = s.ts || Date.now();
+
+    document.querySelectorAll(".lt").forEach(el => el.classList.remove("live"));
+    if (!s.visible) return;
+
+    const el = document.getElementById("tpl-" + s.template);
+    if (!el) return;
+    el.classList.add("live");   // show first so text can be measured
+    fill(el, s.fields);
+  }
+
+  // Live connection to the server; reconnects automatically
+  const es = new EventSource("/events");
+  es.addEventListener("state", e => apply(JSON.parse(e.data)));
+</script>
+</body>
+</html>

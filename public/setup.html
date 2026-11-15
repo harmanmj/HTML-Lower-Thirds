@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Service Order Setup</title>
+<style>
+  :root {
+    --bg: #15171c; --panel: #1f232b; --line: #2e333d; --text: #e9ecf2; --muted: #9aa3b2;
+    --accent: #e8a33d; --go: #2fb36a; --stop: #d6493f;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 "Segoe UI", "Ubuntu", system-ui, sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  h1 { font-size: 18px; margin: 0; }
+  h2 { font-size: 14px; margin: 0 0 10px; }
+  a { color: var(--accent); }
+  .grid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 14px; align-items: start; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 0 0 4px; }
+  .field { margin-bottom: 10px; }
+  input[type=text] {
+    width: 100%; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--line);
+    background: #12141a; color: var(--text); font: inherit;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  .btn { padding: 9px 14px; border: none; border-radius: 6px; font: inherit; font-weight: 700; cursor: pointer; color: #fff; }
+  .btn.go { background: var(--go); }
+  .btn.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); font-weight: 600; }
+  .btn.small { padding: 4px 8px; font-size: 12px; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .hint { font-size: 12px; color: var(--muted); }
+  .pill { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); }
+
+  .results { list-style: none; margin: 8px 0 0; padding: 0; max-height: 360px; overflow-y: auto; }
+  .results li { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 7px 8px; border-radius: 6px; cursor: pointer; }
+  .results li:hover, .results li.sel { background: #2a2721; }
+  .results .grp { color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+  .order { list-style: none; margin: 0; padding: 0; counter-reset: n; }
+  .order li {
+    display: grid; grid-template-columns: 26px 64px 1fr auto; gap: 8px; align-items: center;
+    padding: 6px; border-radius: 6px; border: 1px solid transparent;
+  }
+  .order li:nth-child(odd) { background: #1b1e25; }
+  .order li.drag { opacity: .4; }
+  .order li.over { border-color: var(--accent); }
+  .order .num::before { counter-increment: n; content: counter(n); color: var(--muted); font-size: 12px; }
+  .order .num { text-align: center; cursor: grab; }
+  .order .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .order input[type=text] { padding: 6px 8px; }
+  .order .songname { font-weight: 600; }
+  .order .bad { color: #f0b35a; font-size: 12px; }
+  .order .tools { display: flex; gap: 4px; }
+  .empty { color: var(--muted); padding: 10px 4px; }
+
+  .savebar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .status { font-size: 12px; color: var(--muted); }
+  .status.dirty { color: var(--accent); }
+  .status.err { color: #f0b35a; }
+  select { width: 100%; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--line); background: #12141a; color: var(--text); font: inherit; }
+  .gtabs { display: flex; gap: 6px; }
+  .gtabs button { flex: 1; padding: 7px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+  .gtabs button.active { border-color: var(--accent); color: var(--text); background: #2a2721; }
+  #ppl li .ttl { color: var(--muted); }
+  #ppl li .x { visibility: hidden; }
+  #ppl li:hover .x { visibility: visible; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: flex-start; justify-content: center; padding: 30px 10px; z-index: 10; }
+  .modal[hidden] { display: none; }
+  .sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; width: 100%; max-width: 520px; }
+  .sheet h2 { font-size: 15px; }
+  input[type=date] { padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: #12141a; color: var(--text); font: inherit; }
+  .preview { font-weight: 600; word-break: break-all; }
+  .folders { list-style: none; margin: 8px 0 0; padding: 0; max-height: 260px; overflow-y: auto; border-top: 1px solid var(--line); }
+  .folders li { padding: 7px 6px; cursor: pointer; border-radius: 6px; }
+  .folders li:hover { background: #262a33; }
+  .folders li.file { color: var(--muted); cursor: default; font-size: 12px; }
+  .folders li.file:hover { background: none; }
+  .sheet .err { color: #f0b35a; font-size: 12px; min-height: 16px; margin-top: 6px; }
+
+  /* Inside the control panel's Setup tab */
+  body.embed { background: transparent; }
+  body.embed .wrap { padding: 0; }
+  body.embed .standalone, body.embed h1 { display: none; }
+  .file { font-size: 12px; color: var(--muted); word-break: break-all; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Service order setup</h1>
+    <div class="savebar">
+      <span class="status" id="status"></span>
+      <button class="btn ghost" id="newBtn" type="button">New service…</button>
+      <button class="btn ghost" id="saveAsBtn" type="button">Save as…</button>
+      <button class="btn go" id="saveBtn" type="button">Save</button>
+      <a href="/" class="hint standalone" style="margin-left:6px">Control panel →</a>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>Add a speaker</h2>
+        <form id="spForm" autocomplete="off">
+          <div class="field"><label for="spName">Name</label><input type="text" id="spName" placeholder="Bishop Allen"></div>
+          <div class="field"><label for="spTitle">Title</label><input type="text" id="spTitle" placeholder="Conducting"></div>
+          <div class="field">
+            <label for="spSaveTo">Also save to list</label>
+            <select id="spSaveTo"><option value="">Don't save</option></select>
+          </div>
+          <button class="btn go" type="submit">Add speaker</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Saved people</h2>
+        <div class="gtabs" id="gtabs"></div>
+        <input type="text" id="pplQ" placeholder="Filter…" autocomplete="off" style="margin-top:8px">
+        <ul class="results" id="ppl"></ul>
+        <div class="hint" style="margin-top:6px">Click someone to add them to the service. Save new people with “Also save to list” above.</div>
+      </div>
+
+      <div class="card">
+        <h2>Add a song</h2>
+        <input type="text" id="songQ" placeholder="Search by hymn number or title…" autocomplete="off">
+        <ul class="results" id="results"></ul>
+        <div class="hint" id="songCount" style="margin-top:6px"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Service order</h2>
+      <div class="hint" style="margin:-4px 0 10px">Drag the numbers to reorder, or use ▲ ▼. Speaker names and titles can be edited in place.</div>
+      <ul class="order" id="order"></ul>
+      <div class="file" id="file"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="saveDlg" hidden>
+  <div class="sheet">
+    <h2 id="saveTitle">New service</h2>
+    <div class="row" style="align-items:flex-end">
+      <div class="field" style="flex:none"><label for="svDate">Date</label><input type="date" id="svDate"></div>
+      <div class="field" style="flex:1"><label for="svName">Service name</label><input type="text" id="svName" placeholder="Sacrament Meeting"></div>
+    </div>
+    <div class="field">
+      <label>File name</label>
+      <div class="preview" id="svPreview"></div>
+    </div>
+    <div class="field">
+      <label>Folder</label>
+      <div class="row">
+        <div class="preview" id="svFolder" style="flex:1;font-weight:400"></div>
+        <button class="btn ghost small" id="svChange" type="button">Change…</button>
+      </div>
+      <div id="folderPick" hidden>
+        <div class="hint" id="fpDir" style="margin-top:8px"></div>
+        <ul class="folders" id="fpList"></ul>
+        <div class="row" style="justify-content:flex-end;margin-top:8px">
+          <button class="btn go small" id="fpUse" type="button">Use this folder</button>
+        </div>
+      </div>
+    </div>
+    <div class="err" id="svErr"></div>
+    <div class="row" style="justify-content:flex-end;margin-top:8px">
+      <button class="btn ghost" id="svCancel" type="button">Cancel</button>
+      <button class="btn go" id="svSave" type="button">Create</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  if (new URLSearchParams(location.search).has("embed")) document.body.classList.add("embed");
+  const $ = id => document.getElementById(id);
+  let items = [];        // { type: "speaker", name, title } | { type: "song", ref } | { type: "raw", text }
+  let header = [];       // comment lines kept from the top of the file
+  let songs = [];        // [{ id, name, group }]
+  let dirty = false;
+
+  // ---------- reading and writing the file ----------
+  const DEFAULT_HEADER = [
+    "# Service order",
+    "# One item per line. Columns are separated by |",
+    "#   speaker | Name | Title",
+    "#   song | 1003          (hymn number, file name or part of the title)",
+  ];
+
+  function parse(text) {
+    const out = [], head = [];
+    let seenItem = false;
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line) continue;
+      if (line.startsWith("#")) { if (!seenItem) head.push(raw); continue; }
+      seenItem = true;
+      const cols = line.split(/\s*[|\t]\s*/);
+      const kind = cols[0].toLowerCase();
+      if (kind === "speaker" || kind === "person") out.push({ type: "speaker", name: cols[1] || "", title: cols[2] || "" });
+      else if (kind === "song" || kind === "hymn") out.push({ type: "song", ref: cols.slice(1).join(" ") });
+      else out.push({ type: "raw", text: line });
+    }
+    return { items: out, header: head };
+  }
+
+  function serialize(list = items) {
+    const clean = s => String(s || "").replace(/[|\r\n]/g, " ").trim();
+    const lines = (header.length && list === items ? header : DEFAULT_HEADER).slice();
+    lines.push("");
+    for (const it of list) {
+      if (it.type === "speaker") lines.push(`speaker | ${clean(it.name)} | ${clean(it.title)}`);
+      else if (it.type === "song") lines.push(`song | ${clean(it.ref)}`);
+      else lines.push(it.text);
+    }
+    return lines.join("\n") + "\n";
+  }
+
+  async function load() {
+    const r = await fetch("/api/servicefile").then(x => x.json());
+    const p = parse(r.text);
+    items = p.items; header = p.header;
+    $("file").textContent = "File: " + r.file;
+    if (!saveFolder) saveFolder = r.folder;
+    setDirty(false);
+    render();
+  }
+
+  async function save(newName, overwrite) {
+    const body = { text: serialize() };
+    if (newName) { body.newName = newName; body.overwrite = !!overwrite; }
+    const r = await fetch("/api/servicefile", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }).then(x => x.json()).catch(() => ({ error: "Server not reachable" }));
+    if (r.exists && confirm(r.error + ". Replace it?")) return save(newName, true);
+    if (r.error) { setStatus(r.error, "err"); return; }
+    $("file").textContent = "File: " + r.file;
+    setDirty(false);
+    setStatus("Saved. The control panel has been updated.");
+  }
+
+  function setStatus(msg, cls = "") { const s = $("status"); s.textContent = msg; s.className = "status " + cls; }
+  function setDirty(d) { dirty = d; if (d) setStatus("Unsaved changes", "dirty"); }
+  function changed() { setDirty(true); render(); }
+
+  $("saveBtn").onclick = () => save();
+  // ---------- New service / Save as: "yyyy-mm-dd Service name.txt" in a chosen folder ----------
+  let saveFolder = "", dlgMode = "new", browseDir = "";
+  function comingSunday() {
+    const d = new Date();
+    d.setDate(d.getDate() + ((7 - d.getDay()) % 7));
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function fileName() {
+    const name = $("svName").value.replace(/[<>:"/\\|?*]/g, "").trim();
+    return [$("svDate").value, name].filter(Boolean).join(" ");
+  }
+  function updatePreview() {
+    const n = fileName();
+    $("svPreview").textContent = n ? n + ".txt" : "—";
+    $("svSave").disabled = !$("svDate").value || !$("svName").value.trim();
+  }
+  function openSaveDialog(mode) {
+    if (mode === "new" && dirty && !confirm("Discard unsaved changes?")) return;
+    dlgMode = mode;
+    $("saveTitle").textContent = mode === "new" ? "New service" : "Save service as";
+    $("svSave").textContent = mode === "new" ? "Create" : "Save";
+    if (!$("svDate").value) $("svDate").value = comingSunday();
+    $("svFolder").textContent = saveFolder;
+    $("folderPick").hidden = true;
+    $("svErr").textContent = "";
+    updatePreview();
+    $("saveDlg").hidden = false;
+    $("svName").focus();
+  }
+  async function doSave(overwrite) {
+    const body = { text: dlgMode === "new" ? serialize([]) : serialize(), newName: fileName(), folder: saveFolder, overwrite: !!overwrite };
+    const r = await fetch("/api/servicefile", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    }).then(x => x.json()).catch(() => ({ error: "Server not reachable" }));
+    if (r.exists) { if (confirm(r.error + ". Replace it?")) return doSave(true); return; }
+    if (r.error) { $("svErr").textContent = r.error; return; }
+    $("saveDlg").hidden = true;
+    if (dlgMode === "new") { items = []; header = []; }
+    $("file").textContent = "File: " + r.file;
+    setDirty(false);
+    render();
+    setStatus(dlgMode === "new" ? "New service created. The control panel is using it." : "Saved. The control panel is using the new file.");
+  }
+  $("newBtn").onclick = () => openSaveDialog("new");
+  $("saveAsBtn").onclick = () => openSaveDialog("saveas");
+  $("svDate").oninput = updatePreview;
+  $("svName").oninput = updatePreview;
+  $("svName").onkeydown = e => { if (e.key === "Enter" && !$("svSave").disabled) doSave(); };
+  $("svSave").onclick = () => doSave();
+  $("svCancel").onclick = () => { $("saveDlg").hidden = true; };
+
+  // Folder picker (folders on the computer running the server)
+  async function browseTo(dir) {
+    const q = dir === undefined ? "" : "?dir=" + encodeURIComponent(dir);
+    const r = await fetch("/api/browse" + q).then(x => x.json()).catch(() => ({ error: "Server not reachable" }));
+    if (r.error) { $("svErr").textContent = r.error; return; }
+    $("svErr").textContent = "";
+    browseDir = r.dir;
+    $("fpDir").textContent = r.dir || "This computer";
+    $("fpUse").disabled = !r.dir;
+    const ul = $("fpList");
+    ul.innerHTML = "";
+    const add = (text, fn, cls) => { const li = document.createElement("li"); li.textContent = text; if (cls) li.className = cls; if (fn) li.onclick = fn; ul.appendChild(li); };
+    if (r.parent !== null) add("⬆  Up one folder", () => browseTo(r.parent));
+    r.entries.filter(e => e.type === "dir").forEach(e => add("📁  " + e.name, () => browseTo(e.path)));
+    r.entries.filter(e => e.type === "file").forEach(e => add("📄  " + e.name, null, "file"));
+  }
+  $("svChange").onclick = () => { $("folderPick").hidden = false; browseTo(saveFolder || undefined); };
+  $("fpUse").onclick = () => {
+    saveFolder = browseDir;
+    $("svFolder").textContent = saveFolder;
+    $("folderPick").hidden = true;
+  };
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !$("saveDlg").hidden) { $("saveDlg").hidden = true; return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); save(); }
+  });
+  window.addEventListener("beforeunload", e => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+
+  // ---------- adding ----------
+  $("spForm").onsubmit = e => {
+    e.preventDefault();
+    const name = $("spName").value.trim(), title = $("spTitle").value.trim();
+    if (!name && !title) return;
+    items.push({ type: "speaker", name, title });
+    const gi = $("spSaveTo").value;
+    if (gi !== "" && people.groups[gi]) {
+      const g = people.groups[gi];
+      const dupe = g.people.find(p => p.name.toLowerCase() === name.toLowerCase());
+      if (dupe) dupe.title = title; else g.people.push({ name, title });
+      activeGroup = Number(gi);
+      savePeople();
+    }
+    $("spName").value = ""; $("spTitle").value = ""; $("spName").focus();
+    changed();
+  };
+
+  // ---------- saved people lists ----------
+  let people = { groups: [] }, activeGroup = 0;
+  function renderPeople() {
+    const tabs = $("gtabs");
+    tabs.innerHTML = "";
+    people.groups.forEach((g, gi) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = `${g.name} (${g.people.length})`;
+      b.className = gi === activeGroup ? "active" : "";
+      b.onclick = () => { activeGroup = gi; renderPeople(); };
+      tabs.appendChild(b);
+    });
+    // "Also save to list" options
+    const sel = $("spSaveTo"), keep = sel.value;
+    sel.innerHTML = `<option value="">Don't save</option>`;
+    people.groups.forEach((g, gi) => { const o = document.createElement("option"); o.value = gi; o.textContent = g.name; sel.appendChild(o); });
+    sel.value = keep;
+
+    const ul = $("ppl"), g = people.groups[activeGroup];
+    ul.innerHTML = "";
+    if (!g) return;
+    const q = $("pplQ").value.trim().toLowerCase();
+    const list = g.people.map((p, i) => ({ ...p, i }))
+      .filter(p => !q || (p.name + " " + p.title).toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (!list.length) ul.innerHTML = `<li class="empty">${g.people.length ? "No matches." : "No one saved here yet."}</li>`;
+    for (const p of list) {
+      const li = document.createElement("li");
+      li.innerHTML = `<span><span class="n"></span> <span class="ttl"></span></span><button class="btn ghost small x" title="Remove from list">✕</button>`;
+      li.querySelector(".n").textContent = p.name;
+      li.querySelector(".ttl").textContent = p.title ? "— " + p.title : "";
+      li.title = "Add to the service";
+      li.onclick = () => { items.push({ type: "speaker", name: p.name, title: p.title }); changed(); };
+      li.querySelector(".x").onclick = e => {
+        e.stopPropagation();
+        if (!confirm(`Remove ${p.name} from ${g.name}?`)) return;
+        g.people.splice(p.i, 1);
+        savePeople();
+      };
+      ul.appendChild(li);
+    }
+  }
+  async function savePeople() {
+    renderPeople();
+    await fetch("/api/people", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(people) });
+  }
+  $("pplQ").oninput = renderPeople;
+
+  // Song search: the file name is used as the reference; the folder is added only if two books share a name
+  function refFor(s) {
+    return songs.filter(x => x.name.toLowerCase() === s.name.toLowerCase()).length > 1 ? s.id : s.name;
+  }
+  function findSong(ref) {
+    const r = ref.toLowerCase();
+    return songs.find(s => s.id.toLowerCase() === r || s.name.toLowerCase() === r)
+      || (m => m.length === 1 ? m[0] : null)(songs.filter(s => s.name.toLowerCase().startsWith(r + " -")))
+      || (m => m.length === 1 ? m[0] : null)(songs.filter(s => s.name.toLowerCase().includes(r)));
+  }
+  let selIndex = 0;
+  function searchSongs() {
+    const q = $("songQ").value.trim().toLowerCase();
+    const ul = $("results");
+    ul.innerHTML = "";
+    if (!q) return;
+    const words = q.split(/\s+/);
+    const hits = songs.filter(s => words.every(w => s.name.toLowerCase().includes(w)))
+      .sort((a, b) => (b.name.toLowerCase().startsWith(q + " ") ? 1 : 0) - (a.name.toLowerCase().startsWith(q + " ") ? 1 : 0))
+      .slice(0, 40);
+    selIndex = 0;
+    hits.forEach((s, i) => {
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="n"></span><span class="grp"></span>`;
+      li.querySelector(".n").textContent = s.name;
+      li.querySelector(".grp").textContent = s.group;
+      li.onclick = () => addSong(s);
+      li.dataset.i = i;
+      ul.appendChild(li);
+    });
+    if (!hits.length) ul.innerHTML = `<li class="empty">No songs match.</li>`;
+    highlight();
+  }
+  function highlight() {
+    [...$("results").children].forEach((li, i) => li.classList.toggle("sel", i === selIndex));
+  }
+  function addSong(s) {
+    items.push({ type: "song", ref: refFor(s) });
+    $("songQ").value = ""; $("results").innerHTML = ""; $("songQ").focus();
+    changed();
+  }
+  $("songQ").oninput = searchSongs;
+  $("songQ").onkeydown = e => {
+    const lis = [...$("results").querySelectorAll("li[data-i]")];
+    if (e.key === "ArrowDown") { e.preventDefault(); selIndex = Math.min(selIndex + 1, lis.length - 1); highlight(); }
+    if (e.key === "ArrowUp") { e.preventDefault(); selIndex = Math.max(selIndex - 1, 0); highlight(); }
+    if (e.key === "Enter" && lis[selIndex]) { e.preventDefault(); lis[selIndex].click(); }
+  };
+
+  // ---------- the order list ----------
+  let dragFrom = null;
+  function render() {
+    const ul = $("order");
+    ul.innerHTML = "";
+    if (!items.length) ul.innerHTML = `<li class="empty" style="display:block">Nothing yet. Add speakers and songs on the left.</li>`;
+    items.forEach((it, i) => {
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="num" draggable="true" title="Drag to move"></span><span class="pill"></span><div class="body"></div>
+        <div class="tools">
+          <button class="btn ghost small" title="Move up">▲</button>
+          <button class="btn ghost small" title="Move down">▼</button>
+          <button class="btn ghost small" title="Remove">✕</button>
+        </div>`;
+      const body = li.querySelector(".body");
+      if (it.type === "speaker") {
+        li.querySelector(".pill").textContent = "Speaker";
+        body.innerHTML = `<div class="two"><input type="text" placeholder="Name"><input type="text" placeholder="Title"></div>`;
+        const [n, t] = body.querySelectorAll("input");
+        n.value = it.name; t.value = it.title;
+        n.oninput = () => { it.name = n.value; setDirty(true); };
+        t.oninput = () => { it.title = t.value; setDirty(true); };
+      } else if (it.type === "song") {
+        li.querySelector(".pill").textContent = "Song";
+        const s = findSong(it.ref);
+        body.innerHTML = `<div class="songname"></div>`;
+        body.firstChild.textContent = s ? s.name : it.ref;
+        if (!s) body.insertAdjacentHTML("beforeend", `<div class="bad">Not found in your song folders</div>`);
+        else if (s.group) body.insertAdjacentHTML("beforeend", `<div class="hint"></div>`), body.lastChild.textContent = s.group;
+      } else {
+        li.querySelector(".pill").textContent = "Line";
+        body.textContent = it.text;
+      }
+      const [up, down, del] = li.querySelectorAll(".tools button");
+      up.disabled = i === 0; down.disabled = i === items.length - 1;
+      up.onclick = () => move(i, i - 1);
+      down.onclick = () => move(i, i + 1);
+      del.onclick = () => { items.splice(i, 1); changed(); };
+      // drag and drop by the number
+      const handle = li.querySelector(".num");
+      handle.ondragstart = e => { dragFrom = i; li.classList.add("drag"); e.dataTransfer.effectAllowed = "move"; };
+      handle.ondragend = () => li.classList.remove("drag");
+      li.ondragover = e => { e.preventDefault(); li.classList.add("over"); };
+      li.ondragleave = () => li.classList.remove("over");
+      li.ondrop = e => { e.preventDefault(); li.classList.remove("over"); if (dragFrom !== null) move(dragFrom, i); dragFrom = null; };
+      ul.appendChild(li);
+    });
+  }
+  function move(from, to) {
+    if (to < 0 || to >= items.length || from === to) return;
+    const [it] = items.splice(from, 1);
+    items.splice(to, 0, it);
+    changed();
+  }
+
+  // ---------- start ----------
+  (async () => {
+    const sg = await fetch("/api/songs").then(x => x.json()).catch(() => ({ list: [] }));
+    songs = sg.list || [];
+    $("songCount").textContent = songs.length + " songs available";
+    people = await fetch("/api/people").then(x => x.json()).catch(() => ({ groups: [] }));
+    renderPeople();
+    await load();
+  })();
+
+  // Reload if the file is changed elsewhere (another computer, Notepad) while there are no unsaved edits
+  const es = new EventSource("/events");
+  let lastLoaded = 0;
+  es.addEventListener("rundown", e => {
+    const r = JSON.parse(e.data);
+    if (r.loaded && r.loaded !== lastLoaded) { lastLoaded = r.loaded; if (!dirty) load(); }
+  });
+  es.addEventListener("people", e => { people = JSON.parse(e.data); renderPeople(); });
+  es.addEventListener("songs", e => { songs = JSON.parse(e.data).list || songs; });
+</script>
+</body>
+</html>

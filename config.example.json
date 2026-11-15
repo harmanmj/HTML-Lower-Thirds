@@ -1,0 +1,9 @@
+{
+  "songFolders": [
+    "Songs"
+  ],
+  "linesPerSlide": 2,
+  "openBrowser": true,
+  "lowerThirdsFile": "Services\\Service order.txt",
+  "leadershipFile": "Leadership.txt"
+}

@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lower Thirds Control</title>
+<style>
+  :root {
+    --bg: #15171c; --panel: #1f232b; --line: #2e333d; --text: #e9ecf2; --muted: #9aa3b2;
+    --accent: #e8a33d; --go: #2fb36a; --stop: #d6493f;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.4 "Segoe UI", "Ubuntu", system-ui, sans-serif;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 12px; }
+  body.wide .wrap { max-width: 1100px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .3px; }
+  .conn { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--stop); }
+  .conn.ok .dot { background: var(--go); }
+
+  .onair {
+    border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 12px; display: flex; gap: 10px; align-items: center;
+  }
+  .onair .tag {
+    font-size: 11px; font-weight: 700; letter-spacing: 1px; padding: 3px 7px; border-radius: 4px;
+    background: #333843; color: var(--muted); flex: none;
+  }
+  .onair.live .tag { background: var(--stop); color: #fff; }
+  .onair .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+  .onair.live .what { color: var(--text); }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+  .tabs button {
+    flex: 1; padding: 9px; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--muted); font: inherit; font-weight: 600; cursor: pointer;
+  }
+  .tabs button.active { border-color: var(--accent); color: var(--text); background: #2a2721; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 0 0 4px; }
+  .field { margin-bottom: 10px; }
+  input[type=text], input[type=number], select {
+    width: 100%; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--line);
+    background: #12141a; color: var(--text); font: inherit;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  .inline { display: flex; gap: 8px; align-items: center; }
+  .inline label { margin: 0; white-space: nowrap; }
+  .inline input { width: 80px; }
+
+  .actions { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; margin-top: 4px; }
+  .btn {
+    padding: 12px; border: none; border-radius: 6px; font: inherit; font-weight: 700;
+    cursor: pointer; color: #fff; letter-spacing: .3px;
+  }
+  .btn.show { background: var(--go); }
+  .btn.hide { background: var(--stop); }
+  .btn.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); font-weight: 600; padding: 8px 10px; }
+  .btn:active { transform: translateY(1px); }
+
+  .presets h2 { font-size: 13px; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
+  .plist { list-style: none; margin: 0; padding: 0; }
+  .plist li {
+    display: flex; align-items: center; gap: 6px; padding: 6px 0; border-top: 1px solid var(--line);
+  }
+  .plist li:first-child { border-top: none; }
+  .plist .info { flex: 1; min-width: 0; cursor: pointer; }
+  .plist .pname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plist .psub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plist button { padding: 6px 10px; font-size: 12px; }
+  .pill { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-right: 4px; }
+  .tabs.modes button { padding: 10px; font-size: 15px; }
+  .tabs.modes button.active { background: var(--accent); color: #111; border-color: var(--accent); }
+  #slist li { cursor: pointer; align-items: flex-start; padding: 8px; border-radius: 6px; }
+  #slist li.on { background: #2a2721; box-shadow: inset 3px 0 0 var(--accent); }
+  #slist .stext { white-space: pre-line; font-size: 13px; line-height: 1.35; flex: 1; }
+  #slist .pill { display: block; margin-bottom: 2px; }
+  .filebar { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 8px; }
+  .filebar .hint { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+  .warn { color: #f0b35a; }
+  .warn:empty { display: none; }
+  #rlist li.song-head { cursor: default; padding: 10px 8px 4px; border-top: 1px solid var(--line); }
+  #rlist li.song-head .n { font-weight: 700; color: var(--accent); }
+  #rlist li.cue { cursor: pointer; padding: 7px 8px; border-radius: 6px; border-top: none; }
+  #rlist li.cue:hover { background: #262a33; }
+  #rlist li.cue.on { background: #2a2721; box-shadow: inset 3px 0 0 var(--accent); }
+  #rlist li.lyric { padding-left: 18px; }
+  #rlist .ltext { white-space: pre-line; font-size: 13px; line-height: 1.35; }
+  #rlist .pill { margin-right: 6px; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: flex-start; justify-content: center; padding: 20px 10px; z-index: 10; }
+  .modal[hidden] { display: none; }
+  .sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; width: 100%; max-width: 540px; max-height: calc(100vh - 40px); display: flex; flex-direction: column; }
+  .sheet h2 { font-size: 15px; margin: 0 0 6px; }
+  .blist { overflow-y: auto; margin-top: 8px; border-top: 1px solid var(--line); }
+  .blist li { cursor: pointer; padding: 8px 6px; }
+  .blist li:hover { background: #262a33; }
+  .blist li.cur { color: var(--accent); }
+  .empty { color: var(--muted); font-size: 13px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  kbd { background: #2a2f39; border-radius: 3px; padding: 0 4px; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Lower Thirds</h1>
+    <div class="conn" id="conn"><span class="dot"></span><span id="connText">Connecting…</span></div>
+  </header>
+
+  <div class="onair" id="onair">
+    <span class="tag">OFF AIR</span>
+    <span class="what" id="onairWhat">Nothing on screen</span>
+  </div>
+
+  <div class="tabs modes" id="modes">
+    <button type="button" data-mode="speakers">Service</button>
+    <button type="button" data-mode="lyrics">Lyrics</button>
+    <button type="button" data-mode="setup">Setup</button>
+  </div>
+  <div id="mode-speakers">
+  <div class="card presets">
+    <h2>Service order
+      <span style="display:flex;gap:6px">
+        <button class="btn ghost" id="prevBtn" type="button">◀ Prev</button>
+        <button class="btn show" id="nextBtn" type="button" style="padding:8px 14px">Next ▶</button>
+      </span>
+    </h2>
+    <div class="hint" style="margin:0 0 8px"><kbd>→</kbd> <kbd>Space</kbd> next · <kbd>←</kbd> previous · <kbd>Esc</kbd> clear · click any line to show it</div>
+    <ul class="plist" id="rlist"></ul>
+    <div class="filebar">
+      <span class="hint" id="rfile"></span>
+      <span style="display:flex;gap:6px;flex:none">
+        <button class="btn ghost" id="editBtn" type="button">Edit…</button>
+        <button class="btn ghost" id="browseBtn" type="button">Browse…</button>
+      </span>
+    </div>
+    <div class="hint warn" id="rerr"></div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="card">
+    <form id="form" autocomplete="off">
+      <div id="fields"></div>
+      <div class="field inline">
+        <label for="autoHide">Auto-hide after</label>
+        <input type="number" id="autoHide" min="0" step="1" value="0">
+        <span class="hint" style="margin:0">sec (0 = stay up)</span>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn show">SHOW</button>
+        <button type="button" class="btn hide" id="hideBtn">HIDE</button>
+      </div>
+    </form>
+    <div class="hint"><kbd>Enter</kbd> show · <kbd>Esc</kbd> hide</div>
+  </div>
+
+
+  <div class="card presets">
+    <h2>Presets <button class="btn ghost" id="savePreset" type="button">+ Save current</button></h2>
+    <ul class="plist" id="plist"></ul>
+  </div>
+  </div>
+
+  <div id="mode-setup" hidden>
+    <iframe id="setupFrame" title="Service order setup" style="width:100%;border:0;display:block;min-height:400px"></iframe>
+  </div>
+
+  <div id="mode-lyrics" hidden>
+    <div class="card">
+      <div class="field">
+        <label for="songFilter">Song</label>
+        <input type="text" id="songFilter" placeholder="Filter by number or title…" style="margin-bottom:6px">
+        <select id="songSel"></select>
+      </div>
+      <div class="actions" style="grid-template-columns:1fr 1fr 1fr">
+        <button type="button" class="btn ghost" id="lyPrev">◀ Prev</button>
+        <button type="button" class="btn show" id="lyNext">Next ▶</button>
+        <button type="button" class="btn hide" id="lyClear">Clear</button>
+      </div>
+      <div class="hint"><kbd>→</kbd> <kbd>Space</kbd> next · <kbd>←</kbd> previous · <kbd>Esc</kbd> clear · click a slide to show it</div>
+    </div>
+    <div class="card presets">
+      <ul class="plist" id="slist"></ul>
+      <div class="hint" id="sdir"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="browser" hidden>
+  <div class="sheet">
+    <h2>Choose a service order file</h2>
+    <div class="hint" id="bdir"></div>
+    <ul class="plist blist" id="blist"></ul>
+    <div class="hint warn" id="berr"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:10px">
+      <button class="btn ghost" id="bclose" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="templates.js"></script>
+<script>
+  let active = "person";
+  let presets = [];
+  const drafts = {}; // remembers what you typed per template when switching tabs
+
+  const $ = id => document.getElementById(id);
+
+  // ---------- template tabs + fields ----------
+  function renderTabs() {
+    $("tabs").innerHTML = "";
+    $("tabs").style.display = Object.keys(TEMPLATES).length > 1 ? "" : "none";
+    for (const [key, t] of Object.entries(TEMPLATES)) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = t.label;
+      b.className = key === active ? "active" : "";
+      b.onclick = () => switchTo(key);
+      $("tabs").appendChild(b);
+    }
+  }
+
+  function renderFields(values = {}) {
+    $("fields").innerHTML = "";
+    for (const f of TEMPLATES[active].fields) {
+      const d = document.createElement("div");
+      d.className = "field";
+      d.innerHTML = `<label for="f-${f.key}"></label><input type="text" id="f-${f.key}">`;
+      d.querySelector("label").textContent = f.label;
+      const input = d.querySelector("input");
+      input.placeholder = f.placeholder || "";
+      input.value = values[f.key] || "";
+      input.oninput = () => { drafts[active] = readFields(); };
+      $("fields").appendChild(d);
+    }
+  }
+
+  function readFields() {
+    const out = {};
+    for (const f of TEMPLATES[active].fields) out[f.key] = $("f-" + f.key).value.trim();
+    return out;
+  }
+
+  function switchTo(key, values) {
+    drafts[active] = readFields();
+    active = key;
+    renderTabs();
+    renderFields(values || drafts[key] || {});
+  }
+
+  // ---------- API ----------
+  async function api(path, body) {
+    const r = await fetch(path, {
+      method: body === undefined ? "GET" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return r.json();
+  }
+
+  function showNow(template, fields, autoHide) {
+    return api("/api/show", { template, fields, autoHide: Number(autoHide) || 0 });
+  }
+
+  $("form").onsubmit = e => {
+    e.preventDefault();
+    showNow(active, readFields(), $("autoHide").value);
+  };
+  $("hideBtn").onclick = () => api("/api/hide", {});
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    if (!$("browser").hidden) { $("browser").hidden = true; return; }
+    api("/api/hide", {});
+  });
+
+  // ---------- presets ----------
+  function renderPresets() {
+    const ul = $("plist");
+    ul.innerHTML = "";
+    if (!presets.length) {
+      ul.innerHTML = `<li class="empty">No presets yet. Fill in a lower third and press “Save current”.</li>`;
+      return;
+    }
+    presets.forEach((p, i) => {
+      const t = TEMPLATES[p.template];
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <div class="info" title="Load into the form">
+          <div class="pname"><span class="pill"></span><span class="n"></span></div>
+          <div class="psub"></div>
+        </div>
+        <button class="btn show" type="button">Show</button>
+        <button class="btn ghost" type="button" title="Delete">✕</button>`;
+      li.querySelector(".pill").textContent = t ? t.label : p.template;
+      li.querySelector(".n").textContent = p.name;
+      li.querySelector(".psub").textContent = t ? t.summary(p.fields) : "";
+      li.querySelector(".info").onclick = () => {
+        switchTo(p.template, p.fields);
+        $("autoHide").value = p.autoHide || 0;
+      };
+      const [showBtn, delBtn] = li.querySelectorAll("button");
+      showBtn.onclick = () => showNow(p.template, p.fields, p.autoHide);
+      delBtn.onclick = () => {
+        if (!confirm(`Delete preset “${p.name}”?`)) return;
+        presets.splice(i, 1);
+        api("/api/presets", presets);
+      };
+      ul.appendChild(li);
+    });
+  }
+
+  $("savePreset").onclick = () => {
+    const fields = readFields();
+    const suggested = Object.values(fields).find(Boolean) || TEMPLATES[active].label;
+    const name = prompt("Preset name:", suggested);
+    if (!name) return;
+    const entry = { name: name.trim(), template: active, fields, autoHide: Number($("autoHide").value) || 0 };
+    const idx = presets.findIndex(p => p.name.toLowerCase() === entry.name.toLowerCase());
+    if (idx >= 0) presets[idx] = entry; else presets.push(entry);
+    api("/api/presets", presets);
+  };
+
+  // ---------- rundown from text file ----------
+  function renderRundown(r) {
+    const ul = $("rlist");
+    ul.innerHTML = "";
+    if (r.missing) ul.innerHTML = `<li class="empty">File not found. Use Browse… to pick one.</li>`;
+    else if (!r.items.length) ul.innerHTML = `<li class="empty">Nothing in the file yet.</li>`;
+    let lastSongLine = null;
+    r.items.forEach((item, i) => {
+      if (item.kind === "lyric" && item.line !== lastSongLine) {
+        const h = document.createElement("li");
+        h.className = "song-head";
+        h.innerHTML = `<div class="pname"><span class="pill">Song</span><span class="n"></span></div>`;
+        h.querySelector(".n").textContent = item.song;
+        ul.appendChild(h);
+      }
+      lastSongLine = item.kind === "lyric" ? item.line : null;
+      const li = document.createElement("li");
+      li.className = "cue " + item.kind + (i === r.pos ? " on" : "");
+      if (item.kind === "lyric") {
+        li.innerHTML = `<div class="info"><span class="pill"></span><div class="ltext"></div></div>`;
+        li.querySelector(".pill").textContent = item.label || `Slide ${item.slide + 1}`;
+        li.querySelector(".ltext").textContent = item.text;
+      } else {
+        const t = TEMPLATES[item.template];
+        li.innerHTML = `<div class="info"><div class="pname"><span class="pill"></span><span class="n"></span></div></div>`;
+        li.querySelector(".pill").textContent = t.label;
+        li.querySelector(".n").textContent = t.summary(item.fields);
+        li.title = "Click to show. Double-click to load it into the form below for editing.";
+        li.ondblclick = () => switchTo(item.template, item.fields);
+      }
+      li.onclick = () => api("/api/rundown/show", { i, autoHide: Number($("autoHide").value) || 0 });
+      ul.appendChild(li);
+    });
+    currentFile = r.file;
+    $("rfile").textContent = "\u200E" + r.file + "\u200E"; // keeps slashes in place in the right-aligned path
+    $("rfile").title = r.file;
+    $("rerr").textContent = r.errors && r.errors.length ? "⚠ " + r.errors.join(" · ") : "";
+    const on = ul.querySelector("li.on");
+    if (on) on.scrollIntoView({ block: "nearest" });
+  }
+  $("nextBtn").onclick = () => api("/api/next", { autoHide: Number($("autoHide").value) || 0 });
+  $("prevBtn").onclick = () => api("/api/prev", { autoHide: Number($("autoHide").value) || 0 });
+
+  // ---------- browse for a service order file ----------
+  async function openDir(dir) {
+    $("berr").textContent = "";
+    const q = dir === undefined ? "" : "?dir=" + encodeURIComponent(dir);
+    const r = await fetch("/api/browse" + q).then(x => x.json()).catch(() => ({ error: "Server not reachable" }));
+    if (r.error) { $("berr").textContent = r.error; return; }
+    $("bdir").textContent = r.dir || "This computer";
+    const ul = $("blist");
+    ul.innerHTML = "";
+    const add = (icon, name, fn, cls) => {
+      const li = document.createElement("li");
+      li.textContent = icon + "  " + name;
+      if (cls) li.className = cls;
+      li.onclick = fn;
+      ul.appendChild(li);
+    };
+    if (r.parent !== null) add("⬆", "Up one folder", () => openDir(r.parent));
+    for (const e of r.entries) {
+      if (e.type === "dir") add("📁", e.name, () => openDir(e.path));
+      else add("📄", e.name, () => pickFile(e.path), e.path === currentFile ? "cur" : "");
+    }
+    if (!r.entries.length) ul.insertAdjacentHTML("beforeend", `<li class="empty">No folders or .txt files here.</li>`);
+  }
+  async function pickFile(file) {
+    const r = await api("/api/rundown/file", { path: file });
+    if (r.error) { $("berr").textContent = r.error; return; }
+    $("browser").hidden = true;
+  }
+  let currentFile = "";
+  $("browseBtn").onclick = () => { $("browser").hidden = false; openDir(); };
+  $("bclose").onclick = () => { $("browser").hidden = true; };
+  $("browser").onclick = e => { if (e.target.id === "browser") $("browser").hidden = true; };
+
+  // Arrow keys step through the service order on the Service tab
+  document.addEventListener("keydown", e => {
+    if (mode !== "speakers" || !$("browser").hidden || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+    const autoHide = Number($("autoHide").value) || 0;
+    if (["ArrowRight", "ArrowDown", " ", "PageDown"].includes(e.key)) { e.preventDefault(); api("/api/next", { autoHide }); }
+    if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); api("/api/prev", { autoHide }); }
+  });
+
+  // ---------- mode switch: speakers / lyrics ----------
+  let mode = "speakers";
+  function setMode(m) {
+    mode = m;
+    document.querySelectorAll("#modes button").forEach(b => b.classList.toggle("active", b.dataset.mode === m));
+    $("mode-speakers").hidden = m !== "speakers";
+    $("mode-lyrics").hidden = m !== "lyrics";
+    $("mode-setup").hidden = m !== "setup";
+    document.body.classList.toggle("wide", m === "setup");
+    if (m === "setup") openSetup();
+    try { localStorage.setItem("lt-mode", m); } catch {}
+  }
+
+  // The Setup tab is the service order builder (setup.html), loaded the first time it's opened
+  // and kept alive while you switch tabs, so unsaved edits aren't lost.
+  function openSetup() {
+    const f = $("setupFrame");
+    if (f.src) return;
+    f.src = "setup.html?embed=1";
+    f.onload = () => {
+      const doc = f.contentDocument;
+      const fit = () => { f.style.height = doc.documentElement.scrollHeight + "px"; };
+      new ResizeObserver(fit).observe(doc.body);
+      fit();
+    };
+  }
+  $("editBtn").onclick = () => setMode("setup");
+  document.querySelectorAll("#modes button").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+  try { setMode(localStorage.getItem("lt-mode") || "speakers"); } catch { setMode("speakers"); }
+
+  // ---------- lyrics ----------
+  let songs = { list: [], slides: [], pos: -1 };
+  function renderSongList() {
+    const sel = $("songSel"), sg = songs;
+    const q = $("songFilter").value.trim().toLowerCase();
+    sel.innerHTML = "";
+    const first = document.createElement("option");
+    first.value = "";
+    sel.appendChild(first);
+    const groups = {};
+    let shown = 0;
+    sg.list.forEach(s => {
+      if (q && !s.name.toLowerCase().includes(q) && s.id !== sg.current) return;
+      let g = groups[s.group];
+      if (!g) { g = groups[s.group] = document.createElement("optgroup"); g.label = s.group; sel.appendChild(g); }
+      const o = document.createElement("option");
+      o.value = s.id; o.textContent = s.name;
+      g.appendChild(o);
+      shown++;
+    });
+    first.textContent = q ? `— ${shown} match${shown === 1 ? "" : "es"} —` : "— choose a song —";
+    sel.value = sg.current || "";
+  }
+  $("songFilter").oninput = () => {
+    renderSongList();
+    const opts = [...$("songSel").options].filter(o => o.value);
+    if (opts.length === 1) $("songSel").value = opts[0].value;
+  };
+  $("songFilter").onkeydown = e => {
+    if (e.key === "Enter") {
+      const opt = [...$("songSel").options].find(o => o.value && o.value !== songs.current) || [...$("songSel").options].find(o => o.value);
+      if (opt) api("/api/lyrics/song", { name: opt.value });
+      e.target.blur();
+    }
+  };
+
+  function renderSongs(sg) {
+    songs = sg;
+    renderSongList();
+    const ul = $("slist");
+    ul.innerHTML = "";
+    if (sg.missing && sg.missing.length) ul.innerHTML = `<li class="empty">Folder not found: ${sg.missing.join(", ")}</li>`;
+    else if (!sg.list.length) ul.innerHTML = `<li class="empty">No songs yet. Add .txt files to the songs folder.</li>`;
+    else if (!sg.current) ul.innerHTML = `<li class="empty">Choose a song above.</li>`;
+    sg.slides.forEach((sl, i) => {
+      const li = document.createElement("li");
+      if (i === sg.pos) li.className = "on";
+      li.innerHTML = `<div class="stext"><span class="pill"></span><span class="t"></span></div>`;
+      li.querySelector(".pill").textContent = sl.label || `Slide ${i + 1}`;
+      li.querySelector(".t").textContent = sl.text;
+      li.onclick = () => api("/api/lyrics/show", { i });
+      ul.appendChild(li);
+    });
+    $("sdir").textContent = (sg.current ? sg.title + "  ·  " : "") + sg.list.length + " songs";
+    const on = ul.querySelector("li.on");
+    if (on) on.scrollIntoView({ block: "nearest" });
+  }
+  $("songSel").onchange = e => { if (e.target.value) api("/api/lyrics/song", { name: e.target.value }); };
+  $("lyNext").onclick = () => api("/api/lyrics/next", {});
+  $("lyPrev").onclick = () => api("/api/lyrics/prev", {});
+  $("lyClear").onclick = () => api("/api/hide", {});
+  document.addEventListener("keydown", e => {
+    if (mode !== "lyrics" || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (["ArrowRight", "ArrowDown", " ", "PageDown"].includes(e.key)) { e.preventDefault(); api("/api/lyrics/next", {}); }
+    if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); api("/api/lyrics/prev", {}); }
+  });
+  // after choosing a song, hand the arrow keys back to the slide list
+  $("songSel").addEventListener("change", e => e.target.blur());
+
+  // ---------- live status ----------
+  function renderState(s) {
+    const box = $("onair");
+    const t = TEMPLATES[s.template];
+    box.classList.toggle("live", !!s.visible);
+    box.querySelector(".tag").textContent = s.visible ? "ON AIR" : "OFF AIR";
+    const f = s.fields || {};
+    $("onairWhat").textContent = !s.visible ? "Nothing on screen"
+      : s.template === "lyrics" ? `Lyrics: ${f.song || ""} — ${(f.text || "").split("\n")[0]}`
+      : t ? `${t.label}: ${t.summary(f)}` + (s.autoHide ? ` (auto-hide ${s.autoHide}s)` : "")
+      : "On screen";
+  }
+
+  function connect() {
+    const es = new EventSource("/events");
+    es.onopen = () => { $("conn").classList.add("ok"); $("connText").textContent = "Connected"; };
+    es.onerror = () => { $("conn").classList.remove("ok"); $("connText").textContent = "Reconnecting…"; };
+    es.addEventListener("state", e => renderState(JSON.parse(e.data)));
+    es.addEventListener("presets", e => { presets = JSON.parse(e.data); renderPresets(); });
+    es.addEventListener("rundown", e => renderRundown(JSON.parse(e.data)));
+    es.addEventListener("songs", e => renderSongs(JSON.parse(e.data)));
+  }
+
+  renderTabs();
+  renderFields();
+  connect();
+</script>
+</body>
+</html>

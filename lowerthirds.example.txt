@@ -1,0 +1,13 @@
+# Service order
+# One item per line, in the order of the service. Columns are separated by |
+# Lines starting with # are ignored. Save the file and the control panel updates.
+#
+#   speaker | Name | Title     a name lower third ("person" also works)
+#   song | 1003                a song from your song folders, shown as lyric slides
+#
+# A song can be named by its number (1003), its file name or part of its title.
+# Press Next (or the right arrow) to step through everything in order.
+
+speaker | Jane Doe | Conducting
+song | Amazing Grace
+speaker | Marcus Lee | Speaker

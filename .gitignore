@@ -1,0 +1,9 @@
+presets.json
+node_modules/
+.DS_Store
+Thumbs.db
+lowerthirds.txt
+songs/
+config.json
+Leadership.txt
+dist/
