@@ -63,8 +63,8 @@
   .status.dirty { color: var(--accent); }
   .status.err { color: #f0b35a; }
   select { width: 100%; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--line); background: #12141a; color: var(--text); font: inherit; }
-  .gtabs { display: flex; gap: 6px; }
-  .gtabs button { flex: 1; padding: 7px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+  .gtabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .gtabs button { flex: 1 1 auto; padding: 7px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
   .gtabs button.active { border-color: var(--accent); color: var(--text); background: #2a2721; }
   #ppl li .ttl { color: var(--muted); }
   #ppl li .x { visibility: hidden; }
@@ -120,9 +120,14 @@
       <div class="card">
         <h2>Saved people</h2>
         <div class="gtabs" id="gtabs"></div>
+        <div class="row" style="margin-top:6px;gap:6px">
+          <button class="btn ghost small" id="gNew" type="button">+ New list</button>
+          <button class="btn ghost small" id="gRename" type="button">Rename</button>
+          <button class="btn ghost small" id="gDelete" type="button">Delete list</button>
+        </div>
         <input type="text" id="pplQ" placeholder="Filter…" autocomplete="off" style="margin-top:8px">
         <ul class="results" id="ppl"></ul>
-        <div class="hint" style="margin-top:6px">Click someone to add them to the service. Save new people with “Also save to list” above.</div>
+        <div class="hint" style="margin-top:6px">Click someone to add them to the service. Save new people with “Also save to list” above. Make a list for each ward with + New list.</div>
       </div>
 
       <div class="card">
@@ -349,6 +354,8 @@
   // ---------- saved people lists ----------
   let people = { groups: [] }, activeGroup = 0;
   function renderPeople() {
+    if (activeGroup >= people.groups.length) activeGroup = Math.max(0, people.groups.length - 1);
+    $("gRename").disabled = $("gDelete").disabled = !people.groups.length;
     const tabs = $("gtabs");
     tabs.innerHTML = "";
     people.groups.forEach((g, gi) => {
@@ -394,6 +401,37 @@
     await fetch("/api/people", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(people) });
   }
   $("pplQ").oninput = renderPeople;
+
+  // One list per ward (plus Stake Leaders): add, rename and delete lists
+  const listNameOk = n => n && !people.groups.some(g => g.name.toLowerCase() === n.toLowerCase());
+  $("gNew").onclick = () => {
+    const n = (prompt("Name for the new list (for example: Arvada 1st Ward):") || "").replace(/[\[\]]/g, "").trim();
+    if (!n) return;
+    if (!listNameOk(n)) { alert(`There's already a list called "${n}".`); return; }
+    people.groups.push({ name: n, people: [] });
+    activeGroup = people.groups.length - 1;
+    savePeople();
+  };
+  $("gRename").onclick = () => {
+    const g = people.groups[activeGroup];
+    if (!g) return;
+    const n = (prompt("Rename list:", g.name) || "").replace(/[\[\]]/g, "").trim();
+    if (!n || n === g.name) return;
+    if (!listNameOk(n)) { alert(`There's already a list called "${n}".`); return; }
+    g.name = n;
+    savePeople();
+  };
+  $("gDelete").onclick = () => {
+    const g = people.groups[activeGroup];
+    if (!g) return;
+    const msg = g.people.length
+      ? `Delete the list "${g.name}" and the ${g.people.length} people in it? People already in services stay there.`
+      : `Delete the empty list "${g.name}"?`;
+    if (!confirm(msg)) return;
+    people.groups.splice(activeGroup, 1);
+    activeGroup = Math.max(0, activeGroup - 1);
+    savePeople();
+  };
 
   // Song search: the file name is used as the reference; the folder is added only if two books share a name
   function refFor(s) {

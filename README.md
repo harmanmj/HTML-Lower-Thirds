@@ -5,7 +5,7 @@ Lower thirds, song lyrics and whole service orders for OBS, run from a control p
 - **Speaker lower thirds** (name and title)
 - **Song lyrics** from your own hymn text files, split into slides automatically
 - **Service orders:** speakers and songs in one list, stepped through with the arrow keys
-- **Setup tab** for building services, with saved Stake and Ward leadership lists
+- **Setup tab** for building services, with saved leadership lists for the stake and for each ward
 - No installer and no admin rights needed
 
 ## Get it running
@@ -29,7 +29,7 @@ Everything you create lives in **Documents\HTML Lower Thirds**, which is made th
 ```
 HTML Lower Thirds\
   config.json         settings (song folders, lines per slide, ...)
-  Leadership.txt      saved Stake / Ward leadership lists
+  Leadership.txt      saved leadership lists (stake, and one per ward)
   Services\           service order files, e.g. "2026-11-15 Sacrament Meeting.txt"
   Songs\              song files (starts with an example; you can use other folders instead)
   presets.json        presets saved from the control panel
@@ -68,7 +68,8 @@ song | 1 - the morning breaks
 
 Builds a service without editing text files by hand. It's also available on its own at `http://localhost:3000/setup.html`.
 
-- **Speakers:** type a name and title. Pick "Also save to list" to keep them in **Stake Leaders** or **Ward Leaders**.
+- **Speakers:** type a name and title. Pick "Also save to list" to keep them in a saved list.
+- **Leadership lists:** **Stake Leaders** plus one list per ward. **+ New list** adds a ward (for example *Arvada 1st Ward*); **Rename** and **Delete list** manage the selected list.
 - **Saved people:** click someone to add them to the service.
 - **Songs:** search by hymn number or title; use ↑ ↓ and Enter to pick.
 - **Reorder** by dragging the numbers or with ▲ ▼; ✕ removes an item. Speaker names can be edited in place.
@@ -82,11 +83,14 @@ The saved people lists, editable by hand too:
 [Stake Leaders]
 President Hale | Stake President
 
-[Ward Leaders]
+[Arvada 1st Ward]
 Bishop Allen | Bishop
+
+[Arvada 2nd Ward]
+Bishop Ruiz | Bishop
 ```
 
-Add another `[Section]` to get another list.
+Each `[Section]` is one list. Add a section (or use **+ New list**) for each ward.
 
 ## Lyrics tab
 
@@ -160,7 +164,7 @@ GET works for all of these, so Stream Deck "Website" buttons and Bitfocus Compan
 
 ## Building the app
 
-The release workflow (`.github/workflows/release.yml`) builds the Windows and Linux apps whenever a tag like `v0.1.0` is pushed (0.x versions are marked as pre-releases), and attaches them to a GitHub release. To build locally with Node 22+: `npm run build`, which creates the app in `dist/`.
+The release workflow (`.github/workflows/release.yml`) builds the Windows and Linux apps on every push to `main`. When the `version` in `package.json` hasn't been released yet, it publishes a GitHub release tagged `v<version>`; 0.x versions are marked as pre-releases. So to release a new version, bump `version` and push. To build locally with Node 22+: `npm run build`, which creates the app in `dist/`.
 
 ```
 server.js               the app (Node built-ins only)
