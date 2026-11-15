@@ -25,7 +25,7 @@ With [Node.js](https://nodejs.org) 18 or newer: double-click `start.bat` (Window
 
 The app starts in **this-computer-only** mode, so Windows never asks about the firewall just to use it locally. To use the control panel from a phone, tablet or another computer (or run OBS on a different computer):
 
-1. In the control panel, click **Network: Off** (top right) and then **Turn on**. It lists the addresses other devices can use. The setting is remembered.
+1. In the control panel, click **Network: Off** (top right) and then **Turn on**. It lists the addresses other devices can use. Network access lasts until the app is closed: it always starts as this-computer-only.
 2. Windows Firewall may ask about network access at that point. Allowing it needs an administrator, and only has to be done once per computer. If no administrator is around, click **Cancel**, and someone with admin rights can later double-click **Allow-Network-Access.bat** (from the same release) once. It opens the app's port on private and work networks and keeps working after updates.
 
 Network access can only be turned on or off from the computer running the app. If port 3000 is already in use, set `"port": 3001` in `config.json` and run `Allow-Network-Access.bat 3001`.
@@ -77,7 +77,7 @@ song | 1 - the morning breaks
 
 Builds a service without editing text files by hand. It's also available on its own at `http://localhost:3000/setup.html`.
 
-- **Speakers:** type a name and title. Pick a ward under "Save to ward / list" to keep them in that ward's list, or use **☆ Save to…** on any speaker already in the service.
+- **Speakers:** type a name and title. Pick a ward under "Save to ward / list" to keep them in that ward's list, optionally in a **subsection** (Bishopric, Relief Society, Primary, …: pick a suggestion or type your own). **☆ Save to…** does the same for any speaker already in the service.
 - **Leadership lists:** **Stake Leaders** plus one list per ward. **+ New list** adds a ward (for example *Arvada 1st Ward*); **Rename** and **Delete list** manage the selected list.
 - **Saved people:** click someone to add them to the service.
 - **Songs:** search by hymn number or title; use ↑ ↓ and Enter to pick.
@@ -93,13 +93,20 @@ The saved people lists, editable by hand too:
 President Hale | Stake President
 
 [Arvada 1st Ward]
-Bishop Allen | Bishop
+Brother Kim | Ward Clerk
 
-[Arvada 2nd Ward]
+[Arvada 1st Ward / Bishopric]
+Bishop Allen | Bishop
+Brother Diaz | First Counselor
+
+[Arvada 1st Ward / Relief Society]
+Sister Lopez | Relief Society President
+
+[Arvada 2nd Ward / Bishopric]
 Bishop Ruiz | Bishop
 ```
 
-Each `[Section]` is one list. Add a section (or use **+ New list**) for each ward.
+Each `[Name]` is one list (the stake, or a ward); `[Name / Subsection]` puts people in a subsection of that list. Add a heading (or use **+ New list**) for each ward.
 
 ## Lyrics tab
 
@@ -148,7 +155,7 @@ line two
 - **Paths:** relative paths are inside `Documents\HTML Lower Thirds`. In JSON, Windows paths need double backslashes (`\\`).
 - **openBrowser:** opens the control panel automatically when the app starts.
 - **port:** the port to use (default 3000). Restart the app after changing it.
-- **allowNetwork:** whether other devices can connect (set by the Network switch in the control panel).
+- **allowNetwork:** set to `true` to have network access on every time the app starts (normally it starts as this-computer-only, and the Network switch lasts until the app closes).
 - **Applying changes:** restart the app after editing this file. If it can't read `config.json`, the window says so.
 
 ## Templates and look

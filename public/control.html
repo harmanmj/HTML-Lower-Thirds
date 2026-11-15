@@ -409,11 +409,11 @@
     ul.innerHTML = "";
     $("netErr").textContent = "";
     if (net.enabled) {
-      $("netText").textContent = "Phones and other computers on this network can open these addresses. In OBS on another computer, add overlay.html to the end, for example http://192.168.1.20:" + net.port + "/overlay.html. If Windows asked about the firewall and it wasn't allowed, see Allow-Network-Access.bat in the README.";
+      $("netText").textContent = "Phones and other computers on this network can open these addresses. In OBS on another computer, add overlay.html to the end, for example http://192.168.1.20:" + net.port + "/overlay.html. If Windows asked about the firewall and it wasn't allowed, see Allow-Network-Access.bat in the README. Network access turns off again when the app is closed.";
       for (const a of net.addresses) { const li = document.createElement("li"); li.textContent = a.url + "   (" + a.name + ")"; ul.appendChild(li); }
       if (!net.addresses.length) ul.innerHTML = `<li class="empty">No network connection found.</li>`;
     } else {
-      $("netText").textContent = "Right now only this computer can use HTML Lower Thirds. Turn on network access to use the control panel from a phone, a tablet or another computer, or to run OBS on a different computer. Windows may ask about the firewall the first time; allowing it needs an administrator.";
+      $("netText").textContent = "Right now only this computer can use HTML Lower Thirds. Turn on network access to use the control panel from a phone, a tablet or another computer, or to run OBS on a different computer. Windows may ask about the firewall the first time; allowing it needs an administrator. It goes back to this-computer-only the next time the app starts.";
     }
     $("netToggle").textContent = net.enabled ? "Turn off" : "Turn on";
     $("netToggle").className = "btn " + (net.enabled ? "hide" : "show");
