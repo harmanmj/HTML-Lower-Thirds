@@ -1,6 +1,6 @@
 {
   "name": "html-lower-thirds",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Lower thirds, song lyrics and service orders for OBS, controlled from a browser.",
   "main": "server.js",
   "private": true,
