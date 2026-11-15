@@ -82,6 +82,9 @@
   #slist li.on { background: #2a2721; box-shadow: inset 3px 0 0 var(--accent); }
   #slist .stext { white-space: pre-line; font-size: 13px; line-height: 1.35; flex: 1; }
   #slist .pill { display: block; margin-bottom: 2px; }
+  .netbtn { font: inherit; font-size: 12px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+  .netbtn.on { border-color: var(--go); color: var(--text); }
+  #netList li { font-family: ui-monospace, Consolas, monospace; font-size: 13px; user-select: all; }
   .filebar { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 8px; }
   .filebar .hint { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
   .warn { color: #f0b35a; }
@@ -111,7 +114,10 @@
 <div class="wrap">
   <header>
     <h1>Lower Thirds</h1>
-    <div class="conn" id="conn"><span class="dot"></span><span id="connText">Connecting…</span></div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <button class="netbtn" id="netBtn" type="button" title="Let phones and other computers use this control panel">Network: …</button>
+      <div class="conn" id="conn"><span class="dot"></span><span id="connText">Connecting…</span></div>
+    </div>
   </header>
 
   <div class="onair" id="onair">
@@ -194,6 +200,19 @@
         <span class="hint" id="syncInfo"></span>
         <button class="btn ghost" id="syncBtn" type="button">Update songs</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="netDlg" hidden>
+  <div class="sheet">
+    <h2>Network access</h2>
+    <p class="hint" id="netText" style="font-size:13px;line-height:1.5"></p>
+    <ul class="plist" id="netList" style="margin:6px 0"></ul>
+    <div class="hint warn" id="netErr"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+      <button class="btn ghost" id="netClose" type="button">Close</button>
+      <button class="btn show" id="netToggle" type="button">Turn on</button>
     </div>
   </div>
 </div>
@@ -282,6 +301,7 @@
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
     if (!$("browser").hidden) { $("browser").hidden = true; return; }
+    if (!$("netDlg").hidden) { $("netDlg").hidden = true; return; }
     api("/api/hide", {});
   });
 
@@ -375,6 +395,42 @@
   $("nextBtn").onclick = () => api("/api/next", { autoHide: Number($("autoHide").value) || 0 });
   $("prevBtn").onclick = () => api("/api/prev", { autoHide: Number($("autoHide").value) || 0 });
 
+  // ---------- network access (other devices) ----------
+  let net = { enabled: false, local: true, addresses: [] };
+  async function loadNet() {
+    net = await fetch("/api/network").then(x => x.json()).catch(() => net);
+    const b = $("netBtn");
+    b.textContent = net.enabled ? "Network: On" : "Network: Off";
+    b.classList.toggle("on", net.enabled);
+    if (!$("netDlg").hidden) renderNet();
+  }
+  function renderNet() {
+    const ul = $("netList");
+    ul.innerHTML = "";
+    $("netErr").textContent = "";
+    if (net.enabled) {
+      $("netText").textContent = "Phones and other computers on this network can open these addresses. In OBS on another computer, add overlay.html to the end, for example http://192.168.1.20:" + net.port + "/overlay.html. If Windows asked about the firewall and it wasn't allowed, see Allow-Network-Access.bat in the README.";
+      for (const a of net.addresses) { const li = document.createElement("li"); li.textContent = a.url + "   (" + a.name + ")"; ul.appendChild(li); }
+      if (!net.addresses.length) ul.innerHTML = `<li class="empty">No network connection found.</li>`;
+    } else {
+      $("netText").textContent = "Right now only this computer can use HTML Lower Thirds. Turn on network access to use the control panel from a phone, a tablet or another computer, or to run OBS on a different computer. Windows may ask about the firewall the first time; allowing it needs an administrator.";
+    }
+    $("netToggle").textContent = net.enabled ? "Turn off" : "Turn on";
+    $("netToggle").className = "btn " + (net.enabled ? "hide" : "show");
+    $("netToggle").disabled = !net.local;
+    if (!net.local) $("netErr").textContent = "Network access can only be turned on or off on the computer running HTML Lower Thirds.";
+  }
+  $("netBtn").onclick = () => { $("netDlg").hidden = false; renderNet(); loadNet(); };
+  $("netClose").onclick = () => { $("netDlg").hidden = true; };
+  $("netDlg").onclick = e => { if (e.target.id === "netDlg") $("netDlg").hidden = true; };
+  $("netToggle").onclick = async () => {
+    $("netToggle").disabled = true;
+    const r = await api("/api/network", { enabled: !net.enabled }).catch(() => null);
+    // the server restarts its connection; wait a moment, then refresh
+    setTimeout(async () => { await loadNet(); renderNet(); if (r && r.error) $("netErr").textContent = r.error; }, 1200);
+  };
+  loadNet();
+
   // ---------- browse for a service order file ----------
   async function openDir(dir) {
     $("berr").textContent = "";
@@ -410,7 +466,7 @@
 
   // Arrow keys step through the service order on the Service tab
   document.addEventListener("keydown", e => {
-    if (mode !== "speakers" || !$("browser").hidden || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (mode !== "speakers" || !$("browser").hidden || !$("netDlg").hidden || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
     const autoHide = Number($("autoHide").value) || 0;
     if (["ArrowRight", "ArrowDown", " ", "PageDown"].includes(e.key)) { e.preventDefault(); api("/api/next", { autoHide }); }
     if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); api("/api/prev", { autoHide }); }

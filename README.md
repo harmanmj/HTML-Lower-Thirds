@@ -13,7 +13,6 @@ Lower thirds, song lyrics and whole service orders for OBS, run from a control p
 1. Download **HTML-Lower-Thirds-Windows.exe** (or the Linux version) from the [Releases](../../releases) page.
 2. Put it anywhere you like, such as your Desktop, and double-click it.
    - Windows may show "Windows protected your PC" because the app isn't signed. Click **More info → Run anyway**.
-   - The first time, Windows Firewall may ask about network access. If you don't have admin rights, click **Cancel**: everything still works on this computer.
 3. The control panel opens in your browser. Leave the black window open while you use it, and close it to stop.
 
 The window lists every address you need: the overlay, the control panel and the setup page, both on this computer (Local) and for other devices (Network).
@@ -24,12 +23,12 @@ With [Node.js](https://nodejs.org) 18 or newer: double-click `start.bat` (Window
 
 ### Using it from other computers and phones
 
-Using the app on the computer it runs on never needs admin rights. For other devices to reach it, Windows Firewall has to allow it, and only an administrator can add that rule, whichever port is used. It only needs doing once per computer:
+The app starts in **this-computer-only** mode, so Windows never asks about the firewall just to use it locally. To use the control panel from a phone, tablet or another computer (or run OBS on a different computer):
 
-- Download **Allow-Network-Access.bat** from the same release and have an administrator double-click it. It opens the app's port (3000) on private and work networks, and keeps working after app updates.
-- Or click **Allow access** on the Windows Firewall prompt the first time the app runs, if you're an administrator.
+1. In the control panel, click **Network: Off** (top right) and then **Turn on**. It lists the addresses other devices can use. The setting is remembered.
+2. Windows Firewall may ask about network access at that point. Allowing it needs an administrator, and only has to be done once per computer. If no administrator is around, click **Cancel**, and someone with admin rights can later double-click **Allow-Network-Access.bat** (from the same release) once. It opens the app's port on private and work networks and keeps working after updates.
 
-If port 3000 is already in use, set `"port": 3001` in `config.json`, and run `Allow-Network-Access.bat 3001`.
+Network access can only be turned on or off from the computer running the app. If port 3000 is already in use, set `"port": 3001` in `config.json` and run `Allow-Network-Access.bat 3001`.
 
 ## Your files
 
@@ -39,7 +38,8 @@ Everything you create lives in **Documents\HTML Lower Thirds**, which is made th
 HTML Lower Thirds\
   config.json         settings (song folders, lines per slide, ...)
   Leadership.txt      saved leadership lists (stake, and one per ward)
-  Services\           service order files, e.g. "2026-11-15 Sacrament Meeting.txt"
+  Services\           service order files, in a folder per ward, e.g.
+                        "Arvada 1st Ward\2026-11-15 Sacrament Meeting.txt"
   Songs\              song files (starts with an example; you can use other folders instead)
   presets.json        presets saved from the control panel
 ```
@@ -77,12 +77,12 @@ song | 1 - the morning breaks
 
 Builds a service without editing text files by hand. It's also available on its own at `http://localhost:3000/setup.html`.
 
-- **Speakers:** type a name and title. Pick "Also save to list" to keep them in a saved list.
+- **Speakers:** type a name and title. Pick a ward under "Save to ward / list" to keep them in that ward's list, or use **☆ Save to…** on any speaker already in the service.
 - **Leadership lists:** **Stake Leaders** plus one list per ward. **+ New list** adds a ward (for example *Arvada 1st Ward*); **Rename** and **Delete list** manage the selected list.
 - **Saved people:** click someone to add them to the service.
 - **Songs:** search by hymn number or title; use ↑ ↓ and Enter to pick.
 - **Reorder** by dragging the numbers or with ▲ ▼; ✕ removes an item. Speaker names can be edited in place.
-- **Save** (Ctrl+S) updates the current file. **New service…** and **Save as…** ask for a date (defaults to the coming Sunday) and a service name, save as `yyyy-mm-dd Service name.txt`, and switch the control panel to it. **Change…** picks the folder, which is remembered.
+- **Save** (Ctrl+S) updates the current file. **New service…** and **Save as…** ask for a date (defaults to the coming Sunday), a service name and a **ward**. The file is saved as `Services\<ward>\yyyy-mm-dd Service name.txt` (or straight in the folder with "No ward") and the control panel switches to it. **Change…** picks the folder; the folder and ward are remembered.
 
 ### Leadership.txt
 
@@ -148,6 +148,7 @@ line two
 - **Paths:** relative paths are inside `Documents\HTML Lower Thirds`. In JSON, Windows paths need double backslashes (`\\`).
 - **openBrowser:** opens the control panel automatically when the app starts.
 - **port:** the port to use (default 3000). Restart the app after changing it.
+- **allowNetwork:** whether other devices can connect (set by the Network switch in the control panel).
 - **Applying changes:** restart the app after editing this file. If it can't read `config.json`, the window says so.
 
 ## Templates and look

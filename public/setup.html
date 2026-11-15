@@ -55,7 +55,8 @@
   .order input[type=text] { padding: 6px 8px; }
   .order .songname { font-weight: 600; }
   .order .bad { color: #f0b35a; font-size: 12px; }
-  .order .tools { display: flex; gap: 4px; }
+  .order .tools { display: flex; gap: 4px; align-items: center; }
+  .order .savesel { width: auto; padding: 3px 4px; font-size: 12px; max-width: 110px; }
   .empty { color: var(--muted); padding: 10px 4px; }
 
   .savebar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -110,7 +111,7 @@
           <div class="field"><label for="spName">Name</label><input type="text" id="spName" placeholder="Bishop Allen"></div>
           <div class="field"><label for="spTitle">Title</label><input type="text" id="spTitle" placeholder="Conducting"></div>
           <div class="field">
-            <label for="spSaveTo">Also save to list</label>
+            <label for="spSaveTo">Save to ward / list</label>
             <select id="spSaveTo"><option value="">Don't save</option></select>
           </div>
           <button class="btn go" type="submit">Add speaker</button>
@@ -127,7 +128,7 @@
         </div>
         <input type="text" id="pplQ" placeholder="Filter…" autocomplete="off" style="margin-top:8px">
         <ul class="results" id="ppl"></ul>
-        <div class="hint" style="margin-top:6px">Click someone to add them to the service. Save new people with “Also save to list” above. Make a list for each ward with + New list.</div>
+        <div class="hint" style="margin-top:6px">Click someone to add them to the service. Save new people with “Save to ward / list” above, or with ☆ on a speaker in the service order. Make a list for each ward with + New list.</div>
       </div>
 
       <div class="card">
@@ -153,6 +154,10 @@
     <div class="row" style="align-items:flex-end">
       <div class="field" style="flex:none"><label for="svDate">Date</label><input type="date" id="svDate"></div>
       <div class="field" style="flex:1"><label for="svName">Service name</label><input type="text" id="svName" placeholder="Sacrament Meeting"></div>
+    </div>
+    <div class="field">
+      <label for="svWard">Ward</label>
+      <select id="svWard"></select>
     </div>
     <div class="field">
       <label>File name</label>
@@ -231,6 +236,7 @@
     items = p.items; header = p.header;
     $("file").textContent = "File: " + r.file;
     if (!saveFolder) saveFolder = r.folder;
+    if (!saveWard) saveWard = r.ward || "";
     setDirty(false);
     render();
   }
@@ -264,9 +270,19 @@
     const name = $("svName").value.replace(/[<>:"/\\|?*]/g, "").trim();
     return [$("svDate").value, name].filter(Boolean).join(" ");
   }
+  let saveWard = "";
+  function fillWardSelect() {
+    const sel = $("svWard");
+    sel.innerHTML = `<option value="">No ward (save directly in the folder)</option>`;
+    const names = people.groups.map(g => g.name);
+    if (saveWard && !names.includes(saveWard)) names.push(saveWard);
+    for (const n of names) { const o = document.createElement("option"); o.value = o.textContent = n; sel.appendChild(o); }
+    sel.value = saveWard;
+  }
   function updatePreview() {
     const n = fileName();
-    $("svPreview").textContent = n ? n + ".txt" : "—";
+    const ward = $("svWard").value;
+    $("svPreview").textContent = n ? (ward ? ward + "\\" : "") + n + ".txt" : "—";
     $("svSave").disabled = !$("svDate").value || !$("svName").value.trim();
   }
   function openSaveDialog(mode) {
@@ -278,17 +294,19 @@
     $("svFolder").textContent = saveFolder;
     $("folderPick").hidden = true;
     $("svErr").textContent = "";
+    fillWardSelect();
     updatePreview();
     $("saveDlg").hidden = false;
     $("svName").focus();
   }
   async function doSave(overwrite) {
-    const body = { text: dlgMode === "new" ? serialize([]) : serialize(), newName: fileName(), folder: saveFolder, overwrite: !!overwrite };
+    const body = { text: dlgMode === "new" ? serialize([]) : serialize(), newName: fileName(), folder: saveFolder, ward: $("svWard").value, overwrite: !!overwrite };
     const r = await fetch("/api/servicefile", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     }).then(x => x.json()).catch(() => ({ error: "Server not reachable" }));
     if (r.exists) { if (confirm(r.error + ". Replace it?")) return doSave(true); return; }
     if (r.error) { $("svErr").textContent = r.error; return; }
+    saveWard = $("svWard").value;
     $("saveDlg").hidden = true;
     if (dlgMode === "new") { items = []; header = []; }
     $("file").textContent = "File: " + r.file;
@@ -300,6 +318,7 @@
   $("saveAsBtn").onclick = () => openSaveDialog("saveas");
   $("svDate").oninput = updatePreview;
   $("svName").oninput = updatePreview;
+  $("svWard").onchange = updatePreview;
   $("svName").onkeydown = e => { if (e.key === "Enter" && !$("svSave").disabled) doSave(); };
   $("svSave").onclick = () => doSave();
   $("svCancel").onclick = () => { $("saveDlg").hidden = true; };
@@ -368,7 +387,7 @@
     });
     // "Also save to list" options
     const sel = $("spSaveTo"), keep = sel.value;
-    sel.innerHTML = `<option value="">Don't save</option>`;
+    sel.innerHTML = `<option value="">Don't save (this service only)</option>`;
     people.groups.forEach((g, gi) => { const o = document.createElement("option"); o.value = gi; o.textContent = g.name; sel.appendChild(o); });
     sel.value = keep;
 
@@ -492,6 +511,7 @@
       const li = document.createElement("li");
       li.innerHTML = `<span class="num" draggable="true" title="Drag to move"></span><span class="pill"></span><div class="body"></div>
         <div class="tools">
+          <select class="savesel" title="Save this speaker to a ward / list" hidden></select>
           <button class="btn ghost small" title="Move up">▲</button>
           <button class="btn ghost small" title="Move down">▼</button>
           <button class="btn ghost small" title="Remove">✕</button>
@@ -504,6 +524,21 @@
         n.value = it.name; t.value = it.title;
         n.oninput = () => { it.name = n.value; setDirty(true); };
         t.oninput = () => { it.title = t.value; setDirty(true); };
+        const sel = li.querySelector(".savesel");
+        sel.hidden = false;
+        sel.innerHTML = `<option value="">☆ Save to…</option>` +
+          people.groups.map((g, gi) => `<option value="${gi}"></option>`).join("");
+        people.groups.forEach((g, gi) => { sel.options[gi + 1].textContent = g.name; });
+        sel.onchange = () => {
+          const g = people.groups[sel.value];
+          if (!g || !(it.name || it.title)) { sel.value = ""; return; }
+          const dupe = g.people.find(p => p.name.toLowerCase() === it.name.trim().toLowerCase());
+          if (dupe) dupe.title = it.title.trim(); else g.people.push({ name: it.name.trim(), title: it.title.trim() });
+          activeGroup = Number(sel.value);
+          savePeople();
+          setStatus(`Saved ${it.name || "speaker"} to ${g.name}.`);
+          sel.value = "";
+        };
       } else if (it.type === "song") {
         li.querySelector(".pill").textContent = "Song";
         const s = findSong(it.ref);
@@ -554,7 +589,7 @@
     const r = JSON.parse(e.data);
     if (r.loaded && r.loaded !== lastLoaded) { lastLoaded = r.loaded; if (!dirty) load(); }
   });
-  es.addEventListener("people", e => { people = JSON.parse(e.data); renderPeople(); });
+  es.addEventListener("people", e => { people = JSON.parse(e.data); renderPeople(); render(); });
   es.addEventListener("songs", e => { songs = JSON.parse(e.data).list || songs; });
 </script>
 </body>

@@ -596,6 +596,17 @@ const server = http.createServer(async (req, res) => {
     return err ? sendJSON(res, 400, { error: err }) : sendJSON(res, 200, rundown);
   }
 
+  // Network access:  GET /api/network,  POST /api/network {enabled}  (only from this computer)
+  if (p === "/api/network") {
+    if (req.method === "POST") {
+      if (!isLocalRequest(req)) return sendJSON(res, 403, { error: "Network access can only be changed on the computer running HTML Lower Thirds" });
+      const b = await readBody(req);
+      const err = await setNetworkAccess(!!b.enabled);
+      if (err) return sendJSON(res, 500, { error: err });
+    }
+    return sendJSON(res, 200, { enabled: networkEnabled, port: PORT, local: isLocalRequest(req), addresses: networkAddresses().map((n) => ({ ...n, url: `http://${n.ip}:${PORT}/` })) });
+  }
+
   // Leadership lists (Leadership.txt):  GET /api/people,  POST /api/people {groups:[{name, people:[{name,title}]}]}
   if (p === "/api/people") {
     if (req.method !== "POST") return sendJSON(res, 200, loadPeople());
@@ -615,7 +626,7 @@ const server = http.createServer(async (req, res) => {
   // Service order builder (setup.html)
   //   GET  /api/servicefile                      -> { file, folder, text }
   //   POST /api/servicefile { text }             -> overwrite the current file
-  //   POST /api/servicefile { text, newName, folder } -> create a new file (in folder, or next to
+  //   POST /api/servicefile { text, newName, folder, ward } -> create a new file (in folder\ward, or next to
   //                                                      the current one) and switch to it
   if (p === "/api/servicefile") {
     if (req.method !== "POST") {
@@ -623,7 +634,7 @@ const server = http.createServer(async (req, res) => {
       try { text = fs.readFileSync(DATA_FILE, "utf8").replace(/^\uFEFF/, ""); } catch {}
       const saved = config.serviceFolder && expandPath(config.serviceFolder);
       const folder = saved && fs.existsSync(saved) ? saved : path.join(DATA_DIR, "Services");
-      return sendJSON(res, 200, { file: DATA_FILE, folder, text });
+      return sendJSON(res, 200, { file: DATA_FILE, folder, ward: config.serviceWard || "", text });
     }
     const b = await readBody(req);
     if (typeof b.text !== "string") return sendJSON(res, 400, { error: "No text to save" });
@@ -638,6 +649,16 @@ const server = http.createServer(async (req, res) => {
         try { if (!fs.statSync(folder).isDirectory()) throw 0; }
         catch { return sendJSON(res, 400, { error: "That folder doesn't exist" }); }
         saveConfig({ serviceFolder: folder }); // remember it for next time
+      }
+      // Optional ward: saved in a subfolder named after the ward, e.g. Services\Arvada 1st Ward\
+      if (typeof b.ward === "string") {
+        const ward = b.ward.replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim();
+        saveConfig({ serviceWard: ward });
+        if (ward) {
+          folder = path.join(folder, ward);
+          try { fs.mkdirSync(folder, { recursive: true }); }
+          catch (e) { return sendJSON(res, 500, { error: "Couldn't create the ward folder (" + (e.code || e.message) + ")" }); }
+        }
       }
       target = path.join(folder, name + ".txt");
       if (fs.existsSync(target) && !b.overwrite) return sendJSON(res, 409, { error: `"${name}.txt" already exists`, exists: true });
@@ -700,6 +721,7 @@ function openInBrowser(url) {
 }
 
 server.on("error", (err) => {
+  if (started) return; // errors while switching network access are handled there
   if (err.code === "EADDRINUSE") {
     console.error(`\n  Port ${PORT} is already in use: HTML Lower Thirds is probably already running.`);
     console.error(`  Close the other HTML Lower Thirds window (or end it in Task Manager), then start again.`);
@@ -709,10 +731,53 @@ server.on("error", (err) => {
 });
 process.title = "HTML Lower Thirds";
 
-server.listen(PORT, "0.0.0.0", () => {
-  // Network addresses, with the adapter name so virtual ones (Hyper-V, WSL, VPN) are easy to spot
-  const nets = Object.entries(os.networkInterfaces()).flatMap(([name, list]) =>
+// ---------- network access ----------
+// By default the app only listens on this computer (127.0.0.1), which never triggers a Windows
+// Firewall prompt. Turning on "Network access" in the control panel switches to all network
+// adapters so phones and other computers can connect; Windows asks about the firewall then.
+let networkEnabled = config.allowNetwork === true || process.env.LT_NETWORK === "1";
+function networkAddresses() {
+  return Object.entries(os.networkInterfaces()).flatMap(([name, list]) =>
     (list || []).filter((i) => i.family === "IPv4" && !i.internal).map((i) => ({ name, ip: i.address })));
+}
+function isLocalRequest(req) {
+  const a = req.socket.remoteAddress || "";
+  return a === "127.0.0.1" || a === "::1" || a === "::ffff:127.0.0.1";
+}
+const bindHost = () => (networkEnabled ? "0.0.0.0" : "127.0.0.1");
+
+function setNetworkAccess(on) {
+  if (on === networkEnabled) return Promise.resolve("");
+  return new Promise((resolve) => {
+    const previous = networkEnabled;
+    networkEnabled = on;
+    saveConfig({ allowNetwork: on });
+    // Re-open the server on the new address. Open pages (OBS overlay, control panels)
+    // reconnect by themselves within a second or two.
+    server.close();
+    server.closeAllConnections?.();
+    const onError = (err) => {
+      networkEnabled = previous;
+      saveConfig({ allowNetwork: previous });
+      server.listen(PORT, bindHost());
+      resolve("Couldn't switch network access (" + (err.code || err.message) + ")");
+    };
+    server.once("error", onError);
+    server.listen(PORT, bindHost(), () => {
+      server.off("error", onError);
+      console.log(on ? `\n  Network access ON. Other devices can use:` : "\n  Network access OFF: only this computer can connect.");
+      if (on) for (const n of networkAddresses()) console.log(`    http://${n.ip}:${PORT}/   (${n.name})`);
+      resolve("");
+    });
+  });
+}
+
+let started = false;
+server.listen(PORT, bindHost(), () => {
+  if (started) return;
+  started = true;
+  // Network addresses, with the adapter name so virtual ones (Hyper-V, WSL, VPN) are easy to spot
+  const nets = networkEnabled ? networkAddresses() : [];
   const line = (label, url, note = "") => console.log(`    ${label.padEnd(10)} ${url}${note ? "   (" + note + ")" : ""}`);
 
   console.log("\n  HTML Lower Thirds is running\n");
@@ -722,7 +787,8 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log("\n  CONTROL PANEL");
   line("Local:", `http://localhost:${PORT}/`);
   for (const n of nets) line("Network:", `http://${n.ip}:${PORT}/`, n.name);
-  if (!nets.length) console.log("    Network:   (no network connection found)");
+  if (!networkEnabled) console.log("    Network:   off. Turn on \"Network access\" in the control panel to use other devices.");
+  else if (!nets.length) console.log("    Network:   (no network connection found)");
   console.log("\n  SERVICE ORDER SETUP");
   line("Local:", `http://localhost:${PORT}/setup.html`);
   for (const n of nets) line("Network:", `http://${n.ip}:${PORT}/setup.html`, n.name);
@@ -741,3 +807,4 @@ server.listen(PORT, "0.0.0.0", () => {
   // Open the control panel automatically (packaged app), unless "openBrowser": false in config.json
   if (config.openBrowser ?? IS_PACKAGED) openInBrowser(`http://localhost:${PORT}/`);
 });
+
