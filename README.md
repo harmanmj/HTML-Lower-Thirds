@@ -123,7 +123,7 @@ line two
 
 ```json
 {
-  "songFolders": [
+  "songSources": [
     "%OneDrive%\\Documents\\Hymns\\1985 Hymns",
     "%OneDrive%\\Documents\\Hymns\\Hymns for Home and Church"
   ],
@@ -134,7 +134,8 @@ line two
 }
 ```
 
-- **songFolders:** each folder becomes a group in the song list. You can use `%OneDrive%`, `%USERPROFILE%` or `~` so the same settings work on every computer.
+- **songSources:** folders to copy songs from, for example on OneDrive. Their song files are copied into `Songs\<folder name>` inside `Documents\HTML Lower Thirds`, and the app plays the copies, so songs keep working when OneDrive is offline. New and changed files are copied when the app starts, every 5 minutes, and when you click **Update songs** on the Lyrics tab. Each folder becomes a group in the song list. Use `%OneDrive%`, `%USERPROFILE%` or `~` so the same settings work on every computer.
+- **songFolders:** use this instead to read songs straight from folders without copying them.
 - **Paths:** relative paths are inside `Documents\HTML Lower Thirds`. In JSON, Windows paths need double backslashes (`\\`).
 - **openBrowser:** opens the control panel automatically when the app starts.
 - **Applying changes:** restart the app after editing this file. If it can't read `config.json`, the window says so.

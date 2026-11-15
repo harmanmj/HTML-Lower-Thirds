@@ -190,6 +190,10 @@
     <div class="card presets">
       <ul class="plist" id="slist"></ul>
       <div class="hint" id="sdir"></div>
+      <div class="filebar" id="syncBar" hidden>
+        <span class="hint" id="syncInfo"></span>
+        <button class="btn ghost" id="syncBtn" type="button">Update songs</button>
+      </div>
     </div>
   </div>
 </div>
@@ -477,6 +481,21 @@
       e.target.blur();
     }
   };
+
+  function showSync(r) {
+    if (!r || !r.at) return;
+    const t = new Date(r.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const off = (r.sources || []).filter(x => !x.ok).length;
+    $("syncInfo").textContent = `Songs copied from OneDrive / your song folders at ${t}` +
+      (r.copied ? ` (${r.copied} updated)` : "") + (off ? ` · ${off} folder(s) not reachable, using saved copies` : "");
+  }
+  $("syncBtn").onclick = async () => {
+    $("syncBtn").disabled = true; $("syncInfo").textContent = "Updating…";
+    const r = await api("/api/songs/sync", {}).catch(() => null);
+    $("syncBtn").disabled = false;
+    showSync(r);
+  };
+  fetch("/api/songs").then(x => x.json()).then(d => { $("syncBar").hidden = !d.hasSources; showSync(d.sync); }).catch(() => {});
 
   function renderSongs(sg) {
     songs = sg;

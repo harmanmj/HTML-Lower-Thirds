@@ -227,8 +227,54 @@ function browse(dir) {
 // names the song and is shown as its first slide. A blank line also starts a new section.
 // Each section is split into slides of `linesPerSlide` lines. Lines starting with # are ignored.
 const DEFAULT_SONGS_DIR = path.join(DATA_DIR, "Songs");
+
+// "songSources": folders (for example on OneDrive) whose song files are copied into
+// Documents\HTML Lower Thirds\Songs\<folder name>, so the app has its own copy that
+// works even when OneDrive is offline. New and changed files are copied on start,
+// every few minutes, and from the Lyrics tab's "Update songs" button.
+const SONG_SOURCES = (Array.isArray(config.songSources) ? config.songSources : []).map(expandPath);
+const sourceCopyDir = (src) => path.join(DEFAULT_SONGS_DIR, path.basename(src));
+let lastSync = { at: null, copied: 0, sources: [] };
+
+function syncSongs() {
+  let copied = 0;
+  const sources = [];
+  for (const src of SONG_SOURCES) {
+    const dest = sourceCopyDir(src);
+    let files;
+    try { files = fs.readdirSync(src).filter((f) => f.toLowerCase().endsWith(".txt")); }
+    catch { sources.push({ folder: src, ok: false, files: 0 }); continue; } // offline or not signed in: keep using the copies
+    fs.mkdirSync(dest, { recursive: true });
+    for (const f of files) {
+      const from = path.join(src, f), to = path.join(dest, f);
+      try {
+        const a = fs.statSync(from);
+        let b = null;
+        try { b = fs.statSync(to); } catch {}
+        if (!b || b.size !== a.size || a.mtimeMs > b.mtimeMs + 1000) {
+          fs.copyFileSync(from, to);
+          fs.utimesSync(to, a.atime, a.mtime);
+          copied++;
+        }
+      } catch {}
+    }
+    sources.push({ folder: src, ok: true, files: files.length });
+  }
+  lastSync = { at: Date.now(), copied, sources };
+  return lastSync;
+}
+
+// Where songs are read from: "songFolders" if set, otherwise the copies of "songSources",
+// otherwise the Songs folder
 const SONG_DIRS = (Array.isArray(config.songFolders) && config.songFolders.length
-  ? config.songFolders : [process.env.SONGS_DIR || DEFAULT_SONGS_DIR]).map(expandPath);
+  ? config.songFolders.map(expandPath)
+  : SONG_SOURCES.length ? SONG_SOURCES.map(sourceCopyDir)
+  : [process.env.SONGS_DIR ? expandPath(process.env.SONGS_DIR) : DEFAULT_SONGS_DIR]);
+if (SONG_SOURCES.length) {
+  const r = syncSongs();
+  if (r.copied) console.log(`  Copied ${r.copied} song file(s) from your song sources.`);
+  setInterval(() => { if (syncSongs().copied) scanSongs(); }, 5 * 60 * 1000);
+}
 const LINES_PER_SLIDE = Number(config.linesPerSlide) || 2;
 
 let songs = { dirs: SONG_DIRS, list: [], current: null, title: "", slides: [], pos: -1, missing: [] };
@@ -496,7 +542,13 @@ const server = http.createServer(async (req, res) => {
   //   /api/lyrics/song?name=Folder/Song -> pick a song (just the file name works too)
   //   /api/lyrics/show?i=0             -> show slide i (0-based)
   //   /api/lyrics/next, /api/lyrics/prev
-  if (p === "/api/songs") return sendJSON(res, 200, songs);
+  if (p === "/api/songs") return sendJSON(res, 200, { ...songs, sync: lastSync, hasSources: SONG_SOURCES.length > 0 });
+  // POST /api/songs/sync -> copy new and changed songs from "songSources" now
+  if (p === "/api/songs/sync") {
+    const r = syncSongs();
+    scanSongs(true);
+    return sendJSON(res, 200, r);
+  }
   if (p.startsWith("/api/lyrics/")) {
     const b = req.method === "POST" ? await readBody(req) : {};
     const q = (k) => b[k] ?? url.searchParams.get(k);
@@ -656,6 +708,7 @@ server.listen(PORT, "0.0.0.0", () => {
   if (configError) console.log(`\n  WARNING: config.json could not be read (${configError}). Using defaults.\n  Check for missing commas, and use double backslashes (\\\\) in Windows paths.`);
   console.log(`\n  Lower thirds file: ${DATA_FILE}${fs.existsSync(DATA_FILE) ? "" : "   (FILE NOT FOUND)"}`);
   for (const d of SONG_DIRS) console.log(`  Songs folder:      ${d}${fs.existsSync(d) ? "" : "   (FOLDER NOT FOUND)"}`);
+  for (const src of lastSync.sources) console.log(`  Songs copied from: ${src.folder}${src.ok ? `   (${src.files} songs)` : "   (NOT AVAILABLE: using the copies already saved)"}`);
   console.log(`  Leadership file:   ${PEOPLE_FILE}`);
   console.log(`  Your files:        ${DATA_DIR}`);
   console.log("\n  Leave this window open while you use it. Close it (or press Ctrl+C) to stop.\n");
